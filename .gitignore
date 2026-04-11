@@ -1,0 +1,51 @@
+# Visual Studio
+.vs/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Build outputs
+bin/
+obj/
+publish/
+
+# NuGet packages
+packages/
+*.nupkg
+
+# Environment variables
+.env
+*.env
+
+# Logs
+logs/
+*.log
+
+# IDE files
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.temp
+
+# OS generated files
+Thumbs.db
+.DS_Store
+
+# SQLite databases
+*.db
+*.sqlite
+
+# WebView2
+WebView2
+
+# Excel files
+*.xlsx
+*.xls
+
+# Compressed files
+*.zip
+*.rar
+*.7z

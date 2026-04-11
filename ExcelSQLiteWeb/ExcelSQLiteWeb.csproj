@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <!-- 目标：自包含发布，用户无需安装 .NET（仅需 WebView2 Runtime） -->
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- 允许在非 Windows 环境进行构建（CI/容器） -->
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+
+    <!-- 多文件发布配置 -->
+    <PublishSingleFile>false</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <!-- 默认发布 win-x64；如需 32 位可改为 win-x86 或改用 RuntimeIdentifiers -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- 关闭预编译以减小体积 -->
+    <PublishReadyToRun>false</PublishReadyToRun>
+
+    <!-- 多文件模式 -->
+    <IncludeNativeLibrariesForSelfExtract>false</IncludeNativeLibrariesForSelfExtract>
+    <IncludeAllContentForSelfExtract>false</IncludeAllContentForSelfExtract>
+
+    <!-- 压缩以减小体积 -->
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="ClosedXML" Version="0.105.0" />
+    <PackageReference Include="ExcelDataReader" Version="3.8.0" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3856.49" />
+    <PackageReference Include="EPPlus" Version="7.7.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.4" />
+    <PackageReference Include="Dapper" Version="2.1.66" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="10.0.5" />
+  </ItemGroup>
+
+  <!-- 将HTML文件嵌入到程序集中 -->
+  <ItemGroup>
+    <!-- 嵌入式回退页：必须保持“内联脚本”可用（NavigateToString 无法加载 app.js） -->
+    <EmbeddedResource Include="index.embedded.html">
+      <LogicalName>ExcelSQLiteWeb.index.html</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <!-- 发布到磁盘：WebView2 优先加载程序目录下的文件（支持 app.js + assets） -->
+  <ItemGroup>
+    <Content Include="index.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="app.js">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="index.normal.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="index.expert.html">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="assets\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+</Project>

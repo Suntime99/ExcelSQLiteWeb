@@ -1,0 +1,3410 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExcelSQLite - 数据处理工具</title>
+    <style>
+        /* 基础样式 */
+        body {
+            font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+            font-size: 12px;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+        }
+        
+        /* 主容器 */
+        .container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* 顶部导航栏 */
+        .navbar {
+            background-color: #0078d4;
+            color: white;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .navbar-title {
+            font-size: 14px;
+            font-weight: 600;
+        }
+        
+        .navbar-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .btn {
+            background-color: #0078d4;
+            color: white;
+            border: 1px solid #0066b3;
+            padding: 4px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            background-color: #0066b3;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .btn-secondary {
+            background-color: #f0f0f0;
+            color: #333;
+            border: 1px solid #ccc;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #e0e0e0;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .btn-success {
+            background-color: #107c10;
+            border-color: #0d6e0d;
+        }
+        
+        .btn-success:hover {
+            background-color: #0d6e0d;
+        }
+        
+        .btn-danger {
+            background-color: #d13438;
+            border-color: #b32a2d;
+        }
+        
+        .btn-danger:hover {
+            background-color: #b32a2d;
+        }
+        
+        /* 功能区 */
+        .ribbon {
+            background-color: #f8f9fa;
+            border-bottom: 1px solid #e1e4e8;
+            padding: 4px 16px;
+            display: flex;
+            gap: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        
+        .ribbon-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        
+        .ribbon-group-title {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        
+        .ribbon-buttons {
+            display: flex;
+            gap: 4px;
+        }
+        
+        .ribbon-btn {
+            background-color: #ffffff;
+            border: 1px solid #d1d5da;
+            padding: 6px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: all 0.2s;
+        }
+        
+        .ribbon-btn:hover {
+            background-color: #e6f7ff;
+            border-color: #0078d4;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .ribbon-btn.active {
+            background-color: #0078d4;
+            color: white;
+            border-color: #0066b3;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        /* 主内容区 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+        
+        /* 左侧导航 */
+        .sidebar {
+            width: 200px;
+            background-color: #f8f9fa;
+            border-right: 1px solid #e1e4e8;
+            padding: 16px;
+            overflow-y: auto;
+            transition: all 0.3s;
+        }
+        
+        .sidebar:hover {
+            box-shadow: 2px 0 8px rgba(0,0,0,0.05);
+        }
+        
+        .sidebar-section {
+            margin-bottom: 24px;
+        }
+        
+        .sidebar-section-title {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+        
+        .sidebar-item {
+            padding: 6px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-bottom: 2px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .sidebar-item:hover {
+            background-color: #e6f7ff;
+            transform: translateX(2px);
+        }
+        
+        .sidebar-item.active {
+            background-color: #0078d4;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        /* 右侧内容 */
+        .content {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+            background-color: white;
+        }
+        
+        /* 卡片样式 */
+        .card {
+            background-color: white;
+            border: 1px solid #e1e4e8;
+            border-radius: 4px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+        }
+        
+        .card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        
+        .card-title {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 12px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* 表单元素 */
+        .form-group {
+            margin-bottom: 12px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #d1d5da;
+            border-radius: 3px;
+            font-size: 12px;
+            box-sizing: border-box;
+            transition: all 0.2s;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: #0078d4;
+            box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.2);
+            transform: scale(1.01);
+        }
+        
+        /* 表格样式 */
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .table th,
+        .table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #e1e4e8;
+        }
+        
+        .table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            font-size: 11px;
+            color: #666;
+            text-transform: uppercase;
+        }
+        
+        .table tr:hover {
+            background-color: #f8f9fa;
+        }
+        
+        /* 步骤导航 */
+        .steps {
+            display: flex;
+            margin-bottom: 24px;
+            background-color: #f8f9fa;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        
+        .step {
+            flex: 1;
+            text-align: center;
+            padding: 12px;
+            position: relative;
+            transition: all 0.3s;
+        }
+        
+        .step::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: -50%;
+            width: 100%;
+            height: 2px;
+            background-color: #e1e4e8;
+            transform: translateY(-50%);
+            z-index: 1;
+        }
+        
+        .step:last-child::after {
+            display: none;
+        }
+        
+        .step-number {
+            width: 24px;
+            height: 24px;
+            border-radius: 50%;
+            background-color: #e1e4e8;
+            color: #666;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 8px;
+            font-weight: 600;
+            position: relative;
+            z-index: 2;
+            transition: all 0.3s;
+        }
+        
+        .step.active .step-number {
+            background-color: #0078d4;
+            color: white;
+            transform: scale(1.2);
+            box-shadow: 0 0 0 4px rgba(0, 120, 212, 0.2);
+        }
+        
+        .step.active {
+            color: #0078d4;
+            font-weight: 600;
+        }
+        
+        /* 进度条 */
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background-color: #e1e4e8;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 16px 0;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background-color: #0078d4;
+            border-radius: 4px;
+            transition: width 0.3s ease;
+            background-image: linear-gradient(90deg, #0078d4, #00a4ef);
+        }
+        
+        /* 结果区域 */
+        .result-section {
+            margin-top: 24px;
+        }
+        
+        .result-info {
+            background-color: #e6f7ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 16px;
+            transition: all 0.3s;
+        }
+        
+        .result-info:hover {
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        /* 数据可视化 */
+        .chart-container {
+            width: 100%;
+            height: 300px;
+            margin: 16px 0;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            padding: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        /* 卡片网格 */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .stat-card {
+            background-color: white;
+            border: 1px solid #e1e4e8;
+            border-radius: 4px;
+            padding: 16px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: 600;
+            color: #0078d4;
+            margin-bottom: 8px;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+        
+        /* 加载动画 */
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #0078d4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 150px;
+            }
+            
+            .ribbon {
+                flex-wrap: wrap;
+            }
+            
+            .card-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        /* 高亮效果 */
+        .highlight {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            border-radius: 3px;
+            padding: 2px 4px;
+        }
+        
+        /* 工具提示 */
+        .tooltip {
+            position: relative;
+            display: inline-block;
+        }
+        
+        .tooltip .tooltiptext {
+            visibility: hidden;
+            width: 200px;
+            background-color: #333;
+            color: #fff;
+            text-align: center;
+            border-radius: 3px;
+            padding: 8px;
+            position: absolute;
+            z-index: 1;
+            bottom: 125%;
+            left: 50%;
+            transform: translateX(-50%);
+            opacity: 0;
+            transition: opacity 0.3s;
+            font-size: 11px;
+        }
+        
+        .tooltip:hover .tooltiptext {
+            visibility: visible;
+            opacity: 1;
+        }
+        
+        /* 条件编辑器 */
+        .condition-editor {
+            border: 1px solid #e1e4e8;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 8px 0;
+            background-color: #f8f9fa;
+        }
+        
+        .condition-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+            align-items: center;
+        }
+        
+        .condition-row select,
+        .condition-row input {
+            flex: 1;
+            padding: 4px 8px;
+            border: 1px solid #d1d5da;
+            border-radius: 3px;
+        }
+        
+        /* 统计配置 */
+        .stats-config {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+        
+        /* 关联配置 */
+        .join-config {
+            border: 1px solid #e1e4e8;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 8px 0;
+        }
+        
+        /* 分拆配置 */
+        .split-config {
+            border: 1px solid #e1e4e8;
+            border-radius: 4px;
+            padding: 12px;
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 顶部导航栏 -->
+        <div class="navbar">
+            <div class="navbar-title">ExcelSQLite - 数据处理工具</div>
+            <div class="navbar-buttons">
+                <button class="btn tooltip">
+                    帮助
+                    <span class="tooltiptext">获取使用帮助和文档</span>
+                </button>
+                <button class="btn tooltip">
+                    关于
+                    <span class="tooltiptext">ExcelSQLite v1.0.0</span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- 功能区 -->
+        <div class="ribbon">
+            <div class="ribbon-group">
+                <div class="ribbon-group-title">分析</div>
+                <div class="ribbon-buttons">
+                    <button class="ribbon-btn active">文件分析</button>
+                    <button class="ribbon-btn">工作表分析</button>
+                    <button class="ribbon-btn">元数据扫描</button>
+                </div>
+            </div>
+            <div class="ribbon-group">
+                <div class="ribbon-group-title">查询</div>
+                <div class="ribbon-buttons">
+                    <button class="ribbon-btn">单表查询</button>
+                    <button class="ribbon-btn">多表关联查询</button>
+                    <button class="ribbon-btn">全局搜索</button>
+                </div>
+            </div>
+            <div class="ribbon-group">
+                <div class="ribbon-group-title">统计</div>
+                <div class="ribbon-buttons">
+                    <button class="ribbon-btn">单表统计</button>
+                    <button class="ribbon-btn">多表关联统计</button>
+                    <button class="ribbon-btn">自定义统计</button>
+                </div>
+            </div>
+            <div class="ribbon-group">
+                <div class="ribbon-group-title">分拆</div>
+                <div class="ribbon-buttons">
+                    <button class="ribbon-btn">单表分拆</button>
+                    <button class="ribbon-btn">多表关联分拆</button>
+                    <button class="ribbon-btn">SQL脚本生成</button>
+                </div>
+            </div>
+            <div class="ribbon-group">
+                <div class="ribbon-group-title">安全</div>
+                <div class="ribbon-buttons">
+                    <button class="ribbon-btn">数据脱敏</button>
+                    <button class="ribbon-btn">权限设置</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 主内容区 -->
+        <div class="main-content">
+            <!-- 左侧导航 -->
+            <div class="sidebar">
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">最近文件</div>
+                    <div class="sidebar-item">销售数据.xlsx</div>
+                    <div class="sidebar-item">客户信息.xlsx</div>
+                    <div class="sidebar-item">库存报表.xlsx</div>
+                </div>
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">常用操作</div>
+                    <div class="sidebar-item active">文件分析</div>
+                    <div class="sidebar-item">工作表分析</div>
+                    <div class="sidebar-item">单表查询</div>
+                    <div class="sidebar-item">单表统计</div>
+                    <div class="sidebar-item">数据脱敏</div>
+                </div>
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">模板</div>
+                    <div class="sidebar-item">销售统计模板</div>
+                    <div class="sidebar-item">客户分析模板</div>
+                    <div class="sidebar-item">库存预警模板</div>
+                </div>
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">工具</div>
+                    <div class="sidebar-item">数据清洗</div>
+                    <div class="sidebar-item">差异比对</div>
+                    <div class="sidebar-item">批量处理</div>
+                </div>
+            </div>
+            
+            <!-- 右侧内容 -->
+            <div class="content">
+                <!-- 文件分析界面 -->
+                <div id="file-analysis" class="tab-content">
+                    <!-- 数据概览卡片 -->
+                    <div class="card-grid">
+                        <div class="stat-card">
+                            <div class="stat-value">50,000+</div>
+                            <div class="stat-label">处理行数</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">3</div>
+                            <div class="stat-label">工作表数量</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">30</div>
+                            <div class="stat-label">总字段数</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">2.5s</div>
+                            <div class="stat-label">分析时间</div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">文件分析</div>
+                        <div class="form-group">
+                            <label class="form-label">Excel文件</label>
+                            <input type="text" class="form-control" placeholder="请选择Excel文件">
+                            <button class="btn btn-secondary" style="margin-top: 8px;">浏览...</button>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">分析选项</label>
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    生成工作表清单
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    生成字段清单
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    数据类型推断
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox">
+                                    数据质量分析
+                                </label>
+                            </div>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            开始分析
+                        </button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">分析结果</div>
+                        <div class="result-info">
+                            <strong>文件信息：</strong>销售数据.xlsx<br>
+                            <strong>工作表数量：</strong>3个<br>
+                            <strong>总数据行数：</strong>50,000行<br>
+                            <strong>分析时间：</strong>2.5秒<br>
+                            <strong>数据质量：</strong>良好（98.5% 完整）
+                        </div>
+                        
+                        <h4>工作表清单</h4>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>工作表名称</th>
+                                    <th>数据行数</th>
+                                    <th>数据列数</th>
+                                    <th>数据大小</th>
+                                    <th>完整率</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>销售明细</td>
+                                    <td>50,000</td>
+                                    <td>12</td>
+                                    <td>2.5MB</td>
+                                    <td>99.2%</td>
+                                    <td>
+                                        <button class="btn btn-secondary" style="padding: 2px 8px; margin-right: 4px;">查看字段</button>
+                                        <button class="btn btn-success" style="padding: 2px 8px;">详细分析</button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>产品信息</td>
+                                    <td>1,200</td>
+                                    <td>8</td>
+                                    <td>0.1MB</td>
+                                    <td>100%</td>
+                                    <td>
+                                        <button class="btn btn-secondary" style="padding: 2px 8px; margin-right: 4px;">查看字段</button>
+                                        <button class="btn btn-success" style="padding: 2px 8px;">详细分析</button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>客户信息</td>
+                                    <td>5,000</td>
+                                    <td>10</td>
+                                    <td>0.5MB</td>
+                                    <td>97.8%</td>
+                                    <td>
+                                        <button class="btn btn-secondary" style="padding: 2px 8px; margin-right: 4px;">查看字段</button>
+                                        <button class="btn btn-success" style="padding: 2px 8px;">详细分析</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- 工作表分析界面 -->
+                <div id="worksheet-analysis" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">工作表分析</div>
+                        <div class="form-group">
+                            <label class="form-label">Excel文件</label>
+                            <input type="text" class="form-control" value="销售数据.xlsx" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">选择工作表</label>
+                            <select class="form-control">
+                                <option>销售明细</option>
+                                <option>产品信息</option>
+                                <option>客户信息</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">分析选项</label>
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    字段分析
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    数据质量分析
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    生成统计信息
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox">
+                                    生成SQL脚本
+                                </label>
+                            </div>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            开始分析
+                        </button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">分析结果 - 销售明细</div>
+                        <div class="result-info">
+                            <strong>工作表信息：</strong>销售明细<br>
+                            <strong>数据行数：</strong>50,000行<br>
+                            <strong>数据列数：</strong>12列<br>
+                            <strong>数据大小：</strong>2.5MB<br>
+                            <strong>完整率：</strong>99.2%
+                        </div>
+                        
+                        <h4>字段分析</h4>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>字段名称</th>
+                                    <th>数据类型</th>
+                                    <th>非空值</th>
+                                    <th>唯一值</th>
+                                    <th>最小值</th>
+                                    <th>最大值</th>
+                                    <th>示例值</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>订单ID</td>
+                                    <td>文本</td>
+                                    <td>50,000</td>
+                                    <td>50,000</td>
+                                    <td>ORD-2023-001</td>
+                                    <td>ORD-2023-50000</td>
+                                    <td>ORD-2023-001</td>
+                                </tr>
+                                <tr>
+                                    <td>销售日期</td>
+                                    <td>日期</td>
+                                    <td>50,000</td>
+                                    <td>365</td>
+                                    <td>2023-01-01</td>
+                                    <td>2023-12-31</td>
+                                    <td>2023-01-01</td>
+                                </tr>
+                                <tr>
+                                    <td>销售金额</td>
+                                    <td>数值</td>
+                                    <td>49,800</td>
+                                    <td>45,231</td>
+                                    <td>10.50</td>
+                                    <td>100,000.00</td>
+                                    <td>1,280.50</td>
+                                </tr>
+                                <tr>
+                                    <td>地区</td>
+                                    <td>文本</td>
+                                    <td>50,000</td>
+                                    <td>32</td>
+                                    <td>北京</td>
+                                    <td>新疆</td>
+                                    <td>北京</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        
+                        <h4>数据质量报告</h4>
+                        <div class="result-info">
+                            <strong>空值分布：</strong>200行数据存在空值，主要集中在销售人员字段<br>
+                            <strong>异常值：</strong>销售金额字段存在5个异常值<br>
+                            <strong>数据一致性：</strong>良好
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 全局搜索界面 -->
+                <div id="global-search" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">全局搜索</div>
+                        <div class="form-group">
+                            <label class="form-label">搜索关键词</label>
+                            <input type="text" class="form-control" placeholder="输入搜索关键词">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">搜索范围</label>
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    所有工作表
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    字段名称
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    数据内容
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox">
+                                    仅精确匹配
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">搜索选项</label>
+                            <select class="form-control">
+                                <option>包含关键词</option>
+                                <option>等于关键词</option>
+                                <option>以关键词开头</option>
+                                <option>以关键词结尾</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            开始搜索
+                        </button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">搜索结果</div>
+                        <div class="result-info">
+                            <strong>搜索关键词：</strong>北京<br>
+                            <strong>搜索结果：</strong>找到 1,256 条匹配记录
+                        </div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>工作表</th>
+                                    <th>字段</th>
+                                    <th>匹配内容</th>
+                                    <th>行号</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>销售明细</td>
+                                    <td>地区</td>
+                                    <td>北京</td>
+                                    <td>123</td>
+                                    <td><button class="btn btn-secondary" style="padding: 2px 8px;">查看</button></td>
+                                </tr>
+                                <tr>
+                                    <td>销售明细</td>
+                                    <td>地区</td>
+                                    <td>北京</td>
+                                    <td>456</td>
+                                    <td><button class="btn btn-secondary" style="padding: 2px 8px;">查看</button></td>
+                                </tr>
+                                <tr>
+                                    <td>销售明细</td>
+                                    <td>地区</td>
+                                    <td>北京</td>
+                                    <td>789</td>
+                                    <td><button class="btn btn-secondary" style="padding: 2px 8px;">查看</button></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- 自定义统计界面 -->
+                <div id="custom-stats" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">自定义统计</div>
+                        <div class="form-group">
+                            <label class="form-label">Excel文件</label>
+                            <input type="text" class="form-control" value="销售数据.xlsx" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">选择工作表</label>
+                            <select class="form-control">
+                                <option>销售明细</option>
+                                <option>产品信息</option>
+                                <option>客户信息</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">统计配置</label>
+                            <div class="stats-config">
+                                <div>
+                                    <h5>分组维度</h5>
+                                    <select class="form-control" multiple style="height: 150px;">
+                                        <option>地区</option>
+                                        <option>销售人员</option>
+                                        <option>销售日期</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <h5>统计指标</h5>
+                                    <select class="form-control" multiple style="height: 150px;">
+                                        <option>销售金额 (SUM)</option>
+                                        <option>销售金额 (AVG)</option>
+                                        <option>订单数 (COUNT)</option>
+                                        <option>数量 (SUM)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">自定义计算</label>
+                            <input type="text" class="form-control" placeholder="例如：销售金额/数量 as 单价">
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            执行统计
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 单表分拆界面 -->
+                <div id="single-table-split" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">单表分拆</div>
+                        <div class="form-group">
+                            <label class="form-label">Excel文件</label>
+                            <input type="text" class="form-control" value="销售数据.xlsx" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">选择工作表</label>
+                            <select class="form-control">
+                                <option>销售明细</option>
+                                <option>产品信息</option>
+                                <option>客户信息</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">分拆依据</label>
+                            <select class="form-control">
+                                <option>地区</option>
+                                <option>销售人员</option>
+                                <option>销售日期</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">分拆选项</label>
+                            <div style="display: flex; gap: 16px;">
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="radio" name="split-option" checked>
+                                    按唯一值分拆
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="radio" name="split-option">
+                                    按行数分拆
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">输出选项</label>
+                            <select class="form-control">
+                                <option>生成多个工作表</option>
+                                <option>生成多个文件</option>
+                                <option>导出为CSV文件</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            开始分拆
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 多表关联分拆界面 -->
+                <div id="multi-table-split" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">多表关联分拆</div>
+                        <div class="form-group">
+                            <label class="form-label">Excel文件</label>
+                            <input type="text" class="form-control" value="销售数据.xlsx" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">主表</label>
+                            <select class="form-control">
+                                <option>销售明细</option>
+                                <option>产品信息</option>
+                                <option>客户信息</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">关联表</label>
+                            <select class="form-control">
+                                <option>产品信息</option>
+                                <option>客户信息</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">关联条件</label>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <select class="form-control">
+                                    <option>销售明细.产品ID</option>
+                                </select>
+                                <select class="form-control">
+                                    <option>=</option>
+                                </select>
+                                <select class="form-control">
+                                    <option>产品信息.产品ID</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">分拆依据</label>
+                            <select class="form-control">
+                                <option>地区</option>
+                                <option>销售人员</option>
+                                <option>产品类别</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            开始分拆
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- SQL脚本生成界面 -->
+                <div id="sql-generator" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">SQL脚本生成</div>
+                        <div class="form-group">
+                            <label class="form-label">Excel文件</label>
+                            <input type="text" class="form-control" value="销售数据.xlsx" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">选择工作表</label>
+                            <select class="form-control">
+                                <option>销售明细</option>
+                                <option>产品信息</option>
+                                <option>客户信息</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">脚本类型</label>
+                            <select class="form-control">
+                                <option>查询脚本</option>
+                                <option>统计脚本</option>
+                                <option>关联脚本</option>
+                                <option>自定义脚本</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">生成选项</label>
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    包含所有字段
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox">
+                                    添加WHERE条件
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox">
+                                    添加ORDER BY
+                                </label>
+                            </div>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            生成脚本
+                        </button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">生成的SQL脚本</div>
+                        <div style="background-color: #f8f9fa; padding: 12px; border-radius: 4px; font-family: Consolas, monospace; font-size: 11px; white-space: pre-wrap; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); min-height: 200px;">
+-- 销售明细查询脚本
+SELECT * FROM [销售明细$];
+
+-- 按地区统计脚本
+SELECT 地区, COUNT(*) AS 订单数, SUM(销售金额) AS 总金额
+FROM [销售明细$]
+GROUP BY 地区
+ORDER BY 总金额 DESC;
+                        </div>
+                        <div style="display: flex; gap: 8px; margin-top: 12px;">
+                            <button class="btn btn-secondary">复制脚本</button>
+                            <button class="btn">执行脚本</button>
+                            <button class="btn btn-success">导出脚本</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 权限设置界面 -->
+                <div id="permission-setting" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">权限设置</div>
+                        <div class="form-group">
+                            <label class="form-label">用户/角色</label>
+                            <select class="form-control">
+                                <option>管理员</option>
+                                <option>普通用户</option>
+                                <option>查看权限</option>
+                                <option>自定义角色</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">功能权限</label>
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>功能</th>
+                                        <th>查看</th>
+                                        <th>执行</th>
+                                        <th>管理</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>文件分析</td>
+                                        <td><input type="checkbox" checked></td>
+                                        <td><input type="checkbox" checked></td>
+                                        <td><input type="checkbox"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>数据查询</td>
+                                        <td><input type="checkbox" checked></td>
+                                        <td><input type="checkbox" checked></td>
+                                        <td><input type="checkbox"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>数据统计</td>
+                                        <td><input type="checkbox" checked></td>
+                                        <td><input type="checkbox" checked></td>
+                                        <td><input type="checkbox"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>数据脱敏</td>
+                                        <td><input type="checkbox"></td>
+                                        <td><input type="checkbox"></td>
+                                        <td><input type="checkbox"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>数据分拆</td>
+                                        <td><input type="checkbox" checked></td>
+                                        <td><input type="checkbox" checked></td>
+                                        <td><input type="checkbox"></td>
+                                    </tr>
+                                    <tr>
+                                        <td>SQL脚本生成</td>
+                                        <td><input type="checkbox" checked></td>
+                                        <td><input type="checkbox"></td>
+                                        <td><input type="checkbox"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">数据权限</label>
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    销售数据
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    客户信息
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox">
+                                    财务数据
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox">
+                                    人力资源数据
+                                </label>
+                            </div>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            保存权限设置
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 数据脱敏界面 -->
+                <div id="data-masking" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">数据脱敏</div>
+                        <div class="form-group">
+                            <label class="form-label">Excel文件</label>
+                            <input type="text" class="form-control" value="客户信息.xlsx" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">选择工作表</label>
+                            <select class="form-control">
+                                <option>客户信息</option>
+                                <option>联系人信息</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">脱敏规则配置</label>
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>字段名称</th>
+                                        <th>字段类型</th>
+                                        <th>脱敏规则</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>姓名</td>
+                                        <td>文本</td>
+                                        <td>
+                                            <select class="form-control">
+                                                <option>保留姓，名用*替代</option>
+                                                <option>完全隐藏</option>
+                                                <option>无脱敏</option>
+                                            </select>
+                                        </td>
+                                        <td><button class="btn btn-secondary" style="padding: 2px 8px;">配置</button></td>
+                                    </tr>
+                                    <tr>
+                                        <td>身份证号</td>
+                                        <td>文本</td>
+                                        <td>
+                                            <select class="form-control">
+                                                <option>保留前6后4</option>
+                                                <option>完全隐藏</option>
+                                                <option>无脱敏</option>
+                                            </select>
+                                        </td>
+                                        <td><button class="btn btn-secondary" style="padding: 2px 8px;">配置</button></td>
+                                    </tr>
+                                    <tr>
+                                        <td>手机号</td>
+                                        <td>文本</td>
+                                        <td>
+                                            <select class="form-control">
+                                                <option>保留前3后4</option>
+                                                <option>完全隐藏</option>
+                                                <option>无脱敏</option>
+                                            </select>
+                                        </td>
+                                        <td><button class="btn btn-secondary" style="padding: 2px 8px;">配置</button></td>
+                                    </tr>
+                                    <tr>
+                                        <td>地址</td>
+                                        <td>文本</td>
+                                        <td>
+                                            <select class="form-control">
+                                                <option>保留省市，详细地址隐藏</option>
+                                                <option>完全隐藏</option>
+                                                <option>无脱敏</option>
+                                            </select>
+                                        </td>
+                                        <td><button class="btn btn-secondary" style="padding: 2px 8px;">配置</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">输出选项</label>
+                            <select class="form-control">
+                                <option>覆盖原文件</option>
+                                <option>生成新文件</option>
+                                <option>导出为CSV</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            执行脱敏
+                        </button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">脱敏预览</div>
+                        <div class="result-info">
+                            <strong>脱敏规则：</strong>姓名（保留姓）、身份证号（保留前6后4）、手机号（保留前3后4）、地址（保留省市）<br>
+                            <strong>处理行数：</strong>5,000行<br>
+                            <strong>处理时间：</strong>1.2秒
+                        </div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>原姓名</th>
+                                    <th>脱敏后</th>
+                                    <th>原身份证号</th>
+                                    <th>脱敏后</th>
+                                    <th>原手机号</th>
+                                    <th>脱敏后</th>
+                                    <th>原地址</th>
+                                    <th>脱敏后</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>张三</td>
+                                    <td>张*</td>
+                                    <td>110101199001011234</td>
+                                    <td>110101********1234</td>
+                                    <td>13812345678</td>
+                                    <td>138****5678</td>
+                                    <td>北京市朝阳区某某街道123号</td>
+                                    <td>北京市朝阳区***</td>
+                                </tr>
+                                <tr>
+                                    <td>李四</td>
+                                    <td>李*</td>
+                                    <td>310101199001012345</td>
+                                    <td>310101********2345</td>
+                                    <td>13987654321</td>
+                                    <td>139****4321</td>
+                                    <td>上海市浦东新区某某路456号</td>
+                                    <td>上海市浦东新区***</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- 单表查询界面 -->
+                <div id="single-table-query" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">单表查询</div>
+                        <div class="form-group">
+                            <label class="form-label">Excel文件</label>
+                            <input type="text" class="form-control" value="销售数据.xlsx" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">选择工作表</label>
+                            <select class="form-control">
+                                <option>销售明细</option>
+                                <option>产品信息</option>
+                                <option>客户信息</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">选择字段</label>
+                            <select class="form-control" multiple style="height: 150px;">
+                                <option>订单ID</option>
+                                <option>销售日期</option>
+                                <option>销售金额</option>
+                                <option>地区</option>
+                                <option>销售人员</option>
+                                <option>产品ID</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">过滤条件</label>
+                            <div class="condition-editor">
+                                <div class="condition-row">
+                                    <select class="form-control">
+                                        <option>地区</option>
+                                        <option>销售金额</option>
+                                        <option>销售日期</option>
+                                    </select>
+                                    <select class="form-control">
+                                        <option>=</option>
+                                        <option>></option>
+                                        <option><</option>
+                                        <option>>=</option>
+                                        <option><=</option>
+                                        <option>包含</option>
+                                        <option>不包含</option>
+                                    </select>
+                                    <input type="text" class="form-control" placeholder="值">
+                                    <button class="btn btn-danger" style="padding: 4px 8px;">删除</button>
+                                </div>
+                                <button class="btn btn-secondary" style="margin-top: 8px;">添加条件</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">排序方式</label>
+                            <select class="form-control">
+                                <option>销售日期 (降序)</option>
+                                <option>销售金额 (降序)</option>
+                                <option>地区 (升序)</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            执行查询
+                        </button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">查询结果</div>
+                        <div class="result-info">
+                            <strong>查询条件：</strong>地区 = 北京<br>
+                            <strong>结果行数：</strong>1,256行<br>
+                            <strong>查询时间：</strong>0.8秒
+                        </div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>订单ID</th>
+                                    <th>销售日期</th>
+                                    <th>销售金额</th>
+                                    <th>地区</th>
+                                    <th>销售人员</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>ORD-2023-001</td>
+                                    <td>2023-01-01</td>
+                                    <td>1,280.50</td>
+                                    <td>北京</td>
+                                    <td>王小明</td>
+                                </tr>
+                                <tr>
+                                    <td>ORD-2023-005</td>
+                                    <td>2023-01-02</td>
+                                    <td>2,560.00</td>
+                                    <td>北京</td>
+                                    <td>李小红</td>
+                                </tr>
+                                <tr>
+                                    <td>ORD-2023-010</td>
+                                    <td>2023-01-03</td>
+                                    <td>980.00</td>
+                                    <td>北京</td>
+                                    <td>王小明</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div style="display: flex; gap: 8px; margin-top: 12px;">
+                            <button class="btn btn-secondary">导出结果</button>
+                            <button class="btn">复制结果</button>
+                            <button class="btn btn-success">生成新工作表</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 多表关联查询界面 -->
+                <div id="multi-table-query" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">多表关联查询</div>
+                        <div class="form-group">
+                            <label class="form-label">Excel文件</label>
+                            <input type="text" class="form-control" value="销售数据.xlsx" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">主表</label>
+                            <select class="form-control">
+                                <option>销售明细</option>
+                                <option>产品信息</option>
+                                <option>客户信息</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">关联表</label>
+                            <select class="form-control">
+                                <option>产品信息</option>
+                                <option>客户信息</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">关联条件</label>
+                            <div class="join-config">
+                                <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;">
+                                    <select class="form-control">
+                                        <option>销售明细.产品ID</option>
+                                    </select>
+                                    <select class="form-control">
+                                        <option>=</option>
+                                    </select>
+                                    <select class="form-control">
+                                        <option>产品信息.产品ID</option>
+                                    </select>
+                                </div>
+                                <button class="btn btn-secondary" style="padding: 4px 8px;">添加关联条件</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">选择字段</label>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                                <div>
+                                    <h5>销售明细</h5>
+                                    <select class="form-control" multiple style="height: 150px;">
+                                        <option>订单ID</option>
+                                        <option>销售日期</option>
+                                        <option>销售金额</option>
+                                        <option>地区</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <h5>产品信息</h5>
+                                    <select class="form-control" multiple style="height: 150px;">
+                                        <option>产品ID</option>
+                                        <option>产品名称</option>
+                                        <option>产品类别</option>
+                                        <option>单价</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">过滤条件</label>
+                            <div class="condition-editor">
+                                <div class="condition-row">
+                                    <select class="form-control">
+                                        <option>地区</option>
+                                        <option>销售金额</option>
+                                        <option>产品类别</option>
+                                    </select>
+                                    <select class="form-control">
+                                        <option>=</option>
+                                        <option>></option>
+                                        <option><</option>
+                                    </select>
+                                    <input type="text" class="form-control" placeholder="值">
+                                    <button class="btn btn-danger" style="padding: 4px 8px;">删除</button>
+                                </div>
+                                <button class="btn btn-secondary" style="margin-top: 8px;">添加条件</button>
+                            </div>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            执行关联查询
+                        </button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">查询结果</div>
+                        <div class="result-info">
+                            <strong>关联条件：</strong>销售明细.产品ID = 产品信息.产品ID<br>
+                            <strong>过滤条件：</strong>地区 = 北京<br>
+                            <strong>结果行数：</strong>1,256行<br>
+                            <strong>查询时间：</strong>1.2秒
+                        </div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>订单ID</th>
+                                    <th>销售日期</th>
+                                    <th>销售金额</th>
+                                    <th>地区</th>
+                                    <th>产品名称</th>
+                                    <th>产品类别</th>
+                                    <th>单价</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>ORD-2023-001</td>
+                                    <td>2023-01-01</td>
+                                    <td>1,280.50</td>
+                                    <td>北京</td>
+                                    <td>产品A</td>
+                                    <td>电子产品</td>
+                                    <td>1280.50</td>
+                                </tr>
+                                <tr>
+                                    <td>ORD-2023-005</td>
+                                    <td>2023-01-02</td>
+                                    <td>2,560.00</td>
+                                    <td>北京</td>
+                                    <td>产品B</td>
+                                    <td>电子产品</td>
+                                    <td>1280.00</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- 单表统计界面 -->
+                <div id="single-table-stats" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">单表统计</div>
+                        <div class="form-group">
+                            <label class="form-label">Excel文件</label>
+                            <input type="text" class="form-control" value="销售数据.xlsx" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">选择工作表</label>
+                            <select class="form-control">
+                                <option>销售明细</option>
+                                <option>产品信息</option>
+                                <option>客户信息</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">统计配置</label>
+                            <div class="stats-config">
+                                <div>
+                                    <h5>分组维度</h5>
+                                    <select class="form-control" multiple style="height: 150px;">
+                                        <option>地区</option>
+                                        <option>销售人员</option>
+                                        <option>销售日期</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <h5>统计指标</h5>
+                                    <select class="form-control" multiple style="height: 150px;">
+                                        <option>销售金额 (SUM)</option>
+                                        <option>销售金额 (AVG)</option>
+                                        <option>订单数 (COUNT)</option>
+                                        <option>数量 (SUM)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">过滤条件</label>
+                            <div class="condition-editor">
+                                <div class="condition-row">
+                                    <select class="form-control">
+                                        <option>销售日期</option>
+                                        <option>销售金额</option>
+                                    </select>
+                                    <select class="form-control">
+                                        <option>>=</option>
+                                        <option><=</option>
+                                    </select>
+                                    <input type="text" class="form-control" placeholder="值">
+                                    <button class="btn btn-danger" style="padding: 4px 8px;">删除</button>
+                                </div>
+                                <button class="btn btn-secondary" style="margin-top: 8px;">添加条件</button>
+                            </div>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            执行统计
+                        </button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">统计结果</div>
+                        <div class="result-info">
+                            <strong>统计维度：</strong>地区<br>
+                            <strong>统计指标：</strong>销售金额 (SUM)、订单数 (COUNT)<br>
+                            <strong>过滤条件：</strong>销售日期 >= 2023-01-01 AND 销售日期 <= 2023-12-31<br>
+                            <strong>处理行数：</strong>50,000行<br>
+                            <strong>统计时间：</strong>1.5秒
+                        </div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>地区</th>
+                                    <th>订单数</th>
+                                    <th>销售金额</th>
+                                    <th>平均金额</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>北京</td>
+                                    <td>1,256</td>
+                                    <td>1,568,920.50</td>
+                                    <td>1,249.14</td>
+                                </tr>
+                                <tr>
+                                    <td>上海</td>
+                                    <td>987</td>
+                                    <td>1,245,680.00</td>
+                                    <td>1,262.09</td>
+                                </tr>
+                                <tr>
+                                    <td>广州</td>
+                                    <td>876</td>
+                                    <td>1,098,760.00</td>
+                                    <td>1,254.29</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div class="chart-container">
+                            <!-- 图表占位符 -->
+                            <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: #666;">
+                                销售金额按地区分布图表
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 多表关联统计界面 -->
+                <div id="multi-table-stats" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">多表关联统计</div>
+                        <div class="form-group">
+                            <label class="form-label">Excel文件</label>
+                            <input type="text" class="form-control" value="销售数据.xlsx" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">主表</label>
+                            <select class="form-control">
+                                <option>销售明细</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">关联表</label>
+                            <select class="form-control">
+                                <option>产品信息</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">关联条件</label>
+                            <div class="join-config">
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <select class="form-control">
+                                        <option>销售明细.产品ID</option>
+                                    </select>
+                                    <select class="form-control">
+                                        <option>=</option>
+                                    </select>
+                                    <select class="form-control">
+                                        <option>产品信息.产品ID</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">统计配置</label>
+                            <div class="stats-config">
+                                <div>
+                                    <h5>分组维度</h5>
+                                    <select class="form-control" multiple style="height: 150px;">
+                                        <option>地区</option>
+                                        <option>产品类别</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <h5>统计指标</h5>
+                                    <select class="form-control" multiple style="height: 150px;">
+                                        <option>销售金额 (SUM)</option>
+                                        <option>订单数 (COUNT)</option>
+                                        <option>单价 (AVG)</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            执行关联统计
+                        </button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">统计结果</div>
+                        <div class="result-info">
+                            <strong>关联条件：</strong>销售明细.产品ID = 产品信息.产品ID<br>
+                            <strong>统计维度：</strong>地区、产品类别<br>
+                            <strong>统计指标：</strong>销售金额 (SUM)、订单数 (COUNT)<br>
+                            <strong>处理行数：</strong>50,000行<br>
+                            <strong>统计时间：</strong>2.0秒
+                        </div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>地区</th>
+                                    <th>产品类别</th>
+                                    <th>订单数</th>
+                                    <th>销售金额</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>北京</td>
+                                    <td>电子产品</td>
+                                    <td>856</td>
+                                    <td>1,086,920.50</td>
+                                </tr>
+                                <tr>
+                                    <td>北京</td>
+                                    <td>办公用品</td>
+                                    <td>400</td>
+                                    <td>482,000.00</td>
+                                </tr>
+                                <tr>
+                                    <td>上海</td>
+                                    <td>电子产品</td>
+                                    <td>687</td>
+                                    <td>876,680.00</td>
+                                </tr>
+                                <tr>
+                                    <td>上海</td>
+                                    <td>办公用品</td>
+                                    <td>300</td>
+                                    <td>369,000.00</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- 元数据扫描界面 -->
+                <div id="metadata-scan" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">元数据扫描</div>
+                        <div class="form-group">
+                            <label class="form-label">Excel文件</label>
+                            <input type="text" class="form-control" placeholder="请选择Excel文件">
+                            <button class="btn btn-secondary" style="margin-top: 8px;">浏览...</button>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">扫描选项</label>
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    工作表结构
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    字段信息
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    数据类型推断
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox">
+                                    数据质量分析
+                                </label>
+                            </div>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            开始扫描
+                        </button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">扫描结果</div>
+                        <div class="result-info">
+                            <strong>文件信息：</strong>销售数据.xlsx<br>
+                            <strong>扫描时间：</strong>1.2秒<br>
+                            <strong>工作表数量：</strong>3个<br>
+                            <strong>总字段数：</strong>30个
+                        </div>
+                        
+                        <h4>数据地图</h4>
+                        <div style="background-color: #f8f9fa; padding: 16px; border-radius: 4px; margin-bottom: 16px;">
+                            <!-- 数据地图可视化占位符 -->
+                            <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+                                <div style="background-color: white; padding: 12px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); min-width: 200px;">
+                                    <h5>销售明细</h5>
+                                    <p>12个字段</p>
+                                    <p>50,000行数据</p>
+                                    <p>1280KB</p>
+                                </div>
+                                <div style="background-color: white; padding: 12px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); min-width: 200px;">
+                                    <h5>产品信息</h5>
+                                    <p>8个字段</p>
+                                    <p>1,200行数据</p>
+                                    <p>96KB</p>
+                                </div>
+                                <div style="background-color: white; padding: 12px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); min-width: 200px;">
+                                    <h5>客户信息</h5>
+                                    <p>10个字段</p>
+                                    <p>5,000行数据</p>
+                                    <p>400KB</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <h4>字段信息</h4>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>工作表</th>
+                                    <th>字段名称</th>
+                                    <th>数据类型</th>
+                                    <th>非空率</th>
+                                    <th>唯一值</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>销售明细</td>
+                                    <td>订单ID</td>
+                                    <td>文本</td>
+                                    <td>100%</td>
+                                    <td>50,000</td>
+                                </tr>
+                                <tr>
+                                    <td>销售明细</td>
+                                    <td>销售日期</td>
+                                    <td>日期</td>
+                                    <td>100%</td>
+                                    <td>365</td>
+                                </tr>
+                                <tr>
+                                    <td>销售明细</td>
+                                    <td>销售金额</td>
+                                    <td>数值</td>
+                                    <td>99.6%</td>
+                                    <td>45,231</td>
+                                </tr>
+                                <tr>
+                                    <td>产品信息</td>
+                                    <td>产品ID</td>
+                                    <td>文本</td>
+                                    <td>100%</td>
+                                    <td>1,200</td>
+                                </tr>
+                                <tr>
+                                    <td>产品信息</td>
+                                    <td>产品名称</td>
+                                    <td>文本</td>
+                                    <td>100%</td>
+                                    <td>1,200</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        
+                        <div style="display: flex; gap: 8px; margin-top: 16px;">
+                            <button class="btn btn-secondary">导出元数据</button>
+                            <button class="btn btn-success">生成SQL脚本</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 数据清洗界面 -->
+                <div id="data-cleaning" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">数据清洗</div>
+                        <div class="form-group">
+                            <label class="form-label">Excel文件</label>
+                            <input type="text" class="form-control" value="销售数据.xlsx" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">选择工作表</label>
+                            <select class="form-control">
+                                <option>销售明细</option>
+                                <option>产品信息</option>
+                                <option>客户信息</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">清洗规则</label>
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>字段名称</th>
+                                        <th>清洗规则</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>销售日期</td>
+                                        <td>日期格式标准化</td>
+                                        <td><button class="btn btn-secondary" style="padding: 2px 8px;">配置</button></td>
+                                    </tr>
+                                    <tr>
+                                        <td>销售金额</td>
+                                        <td>去除千分位符</td>
+                                        <td><button class="btn btn-secondary" style="padding: 2px 8px;">配置</button></td>
+                                    </tr>
+                                    <tr>
+                                        <td>地区</td>
+                                        <td>去重</td>
+                                        <td><button class="btn btn-secondary" style="padding: 2px 8px;">配置</button></td>
+                                    </tr>
+                                    <tr>
+                                        <td>销售人员</td>
+                                        <td>填充空值</td>
+                                        <td><button class="btn btn-secondary" style="padding: 2px 8px;">配置</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">输出选项</label>
+                            <select class="form-control">
+                                <option>覆盖原文件</option>
+                                <option>生成新文件</option>
+                                <option>导出为CSV</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            执行清洗
+                        </button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">清洗预览</div>
+                        <div class="result-info">
+                            <strong>清洗规则：</strong>日期格式标准化、去除千分位符、去重、填充空值<br>
+                            <strong>处理行数：</strong>50,000行<br>
+                            <strong>清洗时间：</strong>1.8秒
+                        </div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>原销售日期</th>
+                                    <th>清洗后</th>
+                                    <th>原销售金额</th>
+                                    <th>清洗后</th>
+                                    <th>原地区</th>
+                                    <th>清洗后</th>
+                                    <th>原销售人员</th>
+                                    <th>清洗后</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>2023/01/01</td>
+                                    <td>2023-01-01</td>
+                                    <td>1,280.50</td>
+                                    <td>1280.50</td>
+                                    <td>北京市</td>
+                                    <td>北京</td>
+                                    <td></td>
+                                    <td>未知</td>
+                                </tr>
+                                <tr>
+                                    <td>2023-01-02</td>
+                                    <td>2023-01-02</td>
+                                    <td>2,560.00</td>
+                                    <td>2560.00</td>
+                                    <td>上海市</td>
+                                    <td>上海</td>
+                                    <td>李小红</td>
+                                    <td>李小红</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- 差异比对界面 -->
+                <div id="diff-analysis" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">差异比对</div>
+                        <div class="form-group">
+                            <label class="form-label">源文件</label>
+                            <input type="text" class="form-control" value="销售数据_202301.xlsx" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">目标文件</label>
+                            <input type="text" class="form-control" value="销售数据_202302.xlsx" readonly>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">比对设置</label>
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    新增行
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    删除行
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    修改行
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox">
+                                    忽略空值
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">主键字段</label>
+                            <select class="form-control">
+                                <option>订单ID</option>
+                                <option>产品ID</option>
+                                <option>客户ID</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            开始比对
+                        </button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">比对结果</div>
+                        <div class="result-info">
+                            <strong>源文件：</strong>销售数据_202301.xlsx<br>
+                            <strong>目标文件：</strong>销售数据_202302.xlsx<br>
+                            <strong>比对时间：</strong>2.5秒<br>
+                            <strong>新增行：</strong>1,256行<br>
+                            <strong>删除行：</strong>892行<br>
+                            <strong>修改行：</strong>56行
+                        </div>
+                        
+                        <h4>新增行</h4>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>订单ID</th>
+                                    <th>销售日期</th>
+                                    <th>销售金额</th>
+                                    <th>地区</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="background-color: #d4edda;">
+                                    <td>ORD-2023-10001</td>
+                                    <td>2023-02-01</td>
+                                    <td>1,560.00</td>
+                                    <td>北京</td>
+                                </tr>
+                                <tr style="background-color: #d4edda;">
+                                    <td>ORD-2023-10002</td>
+                                    <td>2023-02-01</td>
+                                    <td>2,890.50</td>
+                                    <td>上海</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        
+                        <h4>修改行</h4>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>订单ID</th>
+                                    <th>字段</th>
+                                    <th>原值</th>
+                                    <th>新值</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="background-color: #fff3cd;">
+                                    <td>ORD-2023-0001</td>
+                                    <td>销售金额</td>
+                                    <td>1,280.50</td>
+                                    <td>1,350.50</td>
+                                </tr>
+                                <tr style="background-color: #fff3cd;">
+                                    <td>ORD-2023-0005</td>
+                                    <td>地区</td>
+                                    <td>北京</td>
+                                    <td>天津</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <!-- 批量处理界面 -->
+                <div id="batch-processing" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">批量处理</div>
+                        <div class="form-group">
+                            <label class="form-label">文件目录</label>
+                            <input type="text" class="form-control" placeholder="请选择文件目录">
+                            <button class="btn btn-secondary" style="margin-top: 8px;">浏览...</button>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">文件类型</label>
+                            <div style="display: flex; gap: 16px;">
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    .xlsx
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    .xls
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox">
+                                    .csv
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">处理任务</label>
+                            <select class="form-control">
+                                <option>批量分析</option>
+                                <option>批量导入</option>
+                                <option>批量脱敏</option>
+                                <option>批量分拆</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">处理选项</label>
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    包含子文件夹
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox">
+                                    覆盖现有结果
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    生成处理报告
+                                </label>
+                            </div>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            开始批量处理
+                        </button>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">处理进度</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 65%;"></div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 16px;">
+                            <span>处理中：销售数据_01.xlsx</span>
+                            <span>65% 完成</span>
+                        </div>
+                        <div style="background-color: #f8f9fa; padding: 12px; border-radius: 4px; font-family: Consolas, monospace; font-size: 11px; white-space: pre-wrap; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); min-height: 100px;">
+[2023-04-01 10:00:00] 开始批量处理
+[2023-04-01 10:00:01] 发现 10 个文件
+[2023-04-01 10:00:02] 处理：销售数据_01.xlsx - 完成
+[2023-04-01 10:00:05] 处理：销售数据_02.xlsx - 完成
+[2023-04-01 10:00:08] 处理：销售数据_03.xlsx - 完成
+[2023-04-01 10:00:11] 处理：销售数据_04.xlsx - 进行中
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 模板管理界面 -->
+                <div id="template-management" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">模板管理</div>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 16px;">
+                            <div class="stat-card">
+                                <div class="stat-value">销售统计</div>
+                                <div class="stat-label">模板</div>
+                                <button class="btn btn-secondary" style="margin-top: 8px; width: 100%;">使用</button>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">客户分析</div>
+                                <div class="stat-label">模板</div>
+                                <button class="btn btn-secondary" style="margin-top: 8px; width: 100%;">使用</button>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">库存预警</div>
+                                <div class="stat-label">模板</div>
+                                <button class="btn btn-secondary" style="margin-top: 8px; width: 100%;">使用</button>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value">+ 新建</div>
+                                <div class="stat-label">模板</div>
+                                <button class="btn btn-success" style="margin-top: 8px; width: 100%;">创建</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">模板名称</label>
+                            <input type="text" class="form-control" placeholder="输入模板名称">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">模板类型</label>
+                            <select class="form-control">
+                                <option>查询模板</option>
+                                <option>统计模板</option>
+                                <option>分拆模板</option>
+                                <option>脱敏模板</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">描述</label>
+                            <textarea class="form-control" rows="3" placeholder="输入模板描述"></textarea>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            保存模板
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- 操作录制与SOP生成界面 -->
+                <div id="operation-recording" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">操作录制</div>
+                        <div style="display: flex; gap: 16px; margin-bottom: 16px;">
+                            <button class="btn btn-success">开始录制</button>
+                            <button class="btn btn-danger">停止录制</button>
+                            <button class="btn btn-secondary">播放录制</button>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">录制名称</label>
+                            <input type="text" class="form-control" placeholder="输入录制名称">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">录制内容</label>
+                            <div style="background-color: #f8f9fa; padding: 12px; border-radius: 4px; font-family: Consolas, monospace; font-size: 11px; white-space: pre-wrap; box-shadow: inset 0 1px 3px rgba(0,0,0,0.1); min-height: 200px;">
+[2023-04-01 10:00:00] 开始录制
+[2023-04-01 10:00:01] 打开文件：销售数据.xlsx
+[2023-04-01 10:00:02] 分析文件结构
+[2023-04-01 10:00:05] 执行单表查询：地区 = 北京
+[2023-04-01 10:00:10] 导出结果到新工作表
+[2023-04-01 10:00:12] 停止录制
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; margin-top: 16px;">
+                            <button class="btn btn-secondary">导出SOP文档</button>
+                            <button class="btn btn-success">保存录制</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 系统设置界面 -->
+                <div id="system-settings" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">系统设置</div>
+                        <div class="form-group">
+                            <label class="form-label">内存设置</label>
+                            <div style="display: flex; align-items: center; gap: 16px;">
+                                <input type="range" min="1024" max="8192" value="4096" style="flex: 1;">
+                                <span>4096 MB</span>
+                            </div>
+                            <small class="text-muted">设置最大内存使用量</small>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">性能设置</label>
+                            <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    启用内存数据库
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    启用异步处理
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox">
+                                    启用多线程处理
+                                </label>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">语言设置</label>
+                            <select class="form-control">
+                                <option>简体中文</option>
+                                <option>English</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">文件设置</label>
+                            <input type="text" class="form-control" value="C:\ExcelSQLite\Temp" placeholder="临时文件目录">
+                            <button class="btn btn-secondary" style="margin-top: 8px;">浏览...</button>
+                        </div>
+                        <button class="btn btn-success" style="width: 100%; margin-top: 16px;">
+                            保存设置
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 标签切换功能
+        document.addEventListener('DOMContentLoaded', function() {
+            const tabContents = document.querySelectorAll('.tab-content');
+            const ribbonBtns = document.querySelectorAll('.ribbon-btn');
+            const sidebarItems = document.querySelectorAll('.sidebar-item');
+            
+            // 默认显示文件分析界面
+            document.getElementById('file-analysis').style.display = 'block';
+            document.querySelector('.ribbon-btn.active').classList.add('active');
+            
+            // 切换标签内容
+            function switchTab(tabId, target) {
+                // 隐藏所有标签内容
+                tabContents.forEach(tab => {
+                    tab.style.display = 'none';
+                });
+                
+                // 显示选中的标签内容
+                const selectedTab = document.getElementById(tabId);
+                if (selectedTab) {
+                    selectedTab.style.display = 'block';
+                }
+                
+                // 重置所有按钮状态
+                ribbonBtns.forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                
+                sidebarItems.forEach(item => {
+                    item.classList.remove('active');
+                });
+                
+                // 激活当前按钮
+                if (target) {
+                    target.classList.add('active');
+                }
+            }
+            
+            // 绑定功能区按钮事件
+            ribbonBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const btnText = this.textContent.trim();
+                    let tabId = '';
+                    
+                    switch(btnText) {
+                        case '文件分析':
+                            tabId = 'file-analysis';
+                            break;
+                        case '工作表分析':
+                            tabId = 'worksheet-analysis';
+                            break;
+                        case '元数据扫描':
+                            tabId = 'metadata-scan';
+                            break;
+                        case '单表查询':
+                            tabId = 'single-table-query';
+                            break;
+                        case '多表关联查询':
+                            tabId = 'multi-table-query';
+                            break;
+                        case '全局搜索':
+                            tabId = 'global-search';
+                            break;
+                        case '单表统计':
+                            tabId = 'single-table-stats';
+                            break;
+                        case '多表关联统计':
+                            tabId = 'multi-table-stats';
+                            break;
+                        case '自定义统计':
+                            tabId = 'custom-stats';
+                            break;
+                        case '单表分拆':
+                            tabId = 'single-table-split';
+                            break;
+                        case '多表关联分拆':
+                            tabId = 'multi-table-split';
+                            break;
+                        case 'SQL脚本生成':
+                            tabId = 'sql-generator';
+                            break;
+                        case '数据脱敏':
+                            tabId = 'data-masking';
+                            break;
+                        case '权限设置':
+                            tabId = 'permission-setting';
+                            break;
+                    }
+                    
+                    switchTab(tabId, this);
+                });
+            });
+            
+            // 绑定侧边栏项目事件
+            sidebarItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    const itemText = this.textContent.trim();
+                    let tabId = '';
+                    
+                    switch(itemText) {
+                        case '文件分析':
+                            tabId = 'file-analysis';
+                            break;
+                        case '工作表分析':
+                            tabId = 'worksheet-analysis';
+                            break;
+                        case '单表查询':
+                            tabId = 'single-table-query';
+                            break;
+                        case '单表统计':
+                            tabId = 'single-table-stats';
+                            break;
+                        case '数据脱敏':
+                            tabId = 'data-masking';
+                            break;
+                        case '销售数据.xlsx':
+                        case '客户信息.xlsx':
+                        case '库存报表.xlsx':
+                            tabId = 'file-analysis';
+                            break;
+                        case '销售统计模板':
+                        case '客户分析模板':
+                        case '库存预警模板':
+                            tabId = 'template-management';
+                            break;
+                        case '数据清洗':
+                            tabId = 'data-cleaning';
+                            break;
+                        case '差异比对':
+                            tabId = 'diff-analysis';
+                            break;
+                        case '批量处理':
+                            tabId = 'batch-processing';
+                            break;
+                    }
+                    
+                    switchTab(tabId, this);
+                });
+            });
+        });
+    </script>
+</body>
+</html>
+                                        <option>单价</option>
+                                        <option>销售人员</option>
+                                        <option>地区</option>
+                                        <option>状态</option>
+                                    </select>
+                                </div>
+                                <div style="display: flex; flex-direction: column; justify-content: center; gap: 8px;">
+                                    <button class="btn">></button>
+                                    <button class="btn"><</button>
+                                    <button class="btn">>></button>
+                                    <button class="btn"><<</button>
+                                </div>
+                                <div style="flex: 1;">
+                                    <h5>已选字段</h5>
+                                    <select class="form-control" multiple style="height: 200px;">
+                                        <option>订单ID</option>
+                                        <option>销售日期</option>
+                                        <option>销售金额</option>
+                                        <option>地区</option>
+                                        <option>销售人员</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 16px;">
+                            <button class="btn btn-secondary">上一步</button>
+                            <button class="btn btn-success">下一步</button>
+                        </div>
+                    </div>
+                    
+                    <!-- 步骤 2：设置查询条件 -->
+                    <div class="card" style="display: none;">
+                        <div class="card-title">步骤 2：设置查询条件</div>
+                        <div class="form-group">
+                            <label class="form-label">过滤条件</label>
+                            <div class="condition-editor">
+                                <div class="condition-row">
+                                    <select class="form-control">
+                                        <option>销售金额</option>
+                                        <option>销售日期</option>
+                                        <option>地区</option>
+                                        <option>销售人员</option>
+                                    </select>
+                                    <select class="form-control">
+                                        <option>></option>
+                                        <option><</option>
+                                        <option>=</option>
+                                        <option>>=</option>
+                                        <option><=</option>
+                                        <option>LIKE</option>
+                                        <option>IN</option>
+                                    </select>
+                                    <input type="text" class="form-control" placeholder="输入值">
+                                    <select class="form-control">
+                                        <option>AND</option>
+                                        <option>OR</option>
+                                    </select>
+                                    <button class="btn btn-danger">删除</button>
+                                </div>
+                                <div class="condition-row">
+                                    <select class="form-control">
+                                        <option>销售日期</option>
+                                        <option>销售金额</option>
+                                        <option>地区</option>
+                                        <option>销售人员</option>
+                                    </select>
+                                    <select class="form-control">
+                                        <option>></option>
+                                        <option><</option>
+                                        <option>=</option>
+                                        <option>>=</option>
+                                        <option><=</option>
+                                        <option>LIKE</option>
+                                        <option>IN</option>
+                                    </select>
+                                    <input type="text" class="form-control" placeholder="输入值">
+                                    <select class="form-control">
+                                        <option>AND</option>
+                                        <option>OR</option>
+                                    </select>
+                                    <button class="btn btn-danger">删除</button>
+                                </div>
+                                <button class="btn btn-secondary" style="margin-top: 8px;">添加条件</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">排序设置</label>
+                            <div style="display: flex; gap: 8px;">
+                                <select class="form-control">
+                                    <option>销售金额</option>
+                                    <option>销售日期</option>
+                                    <option>地区</option>
+                                </select>
+                                <select class="form-control">
+                                    <option>升序</option>
+                                    <option>降序</option>
+                                </select>
+                                <button class="btn btn-secondary">添加排序</button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">结果限制</label>
+                            <input type="number" class="form-control" placeholder="输入最大行数" value="10000">
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 16px;">
+                            <button class="btn btn-secondary">上一步</button>
+                            <button class="btn btn-success">下一步</button>
+                        </div>
+                    </div>
+                    
+                    <!-- 步骤 3：执行查询 -->
+                    <div class="card" style="display: none;">
+                        <div class="card-title">步骤 3：执行查询</div>
+                        <div class="result-info">
+                            <strong>生成的SQL语句：</strong><br>
+                            <code>SELECT 订单ID, 销售日期, 销售金额, 地区, 销售人员 FROM [销售明细$] WHERE 销售金额 > 1000 AND 地区 = '北京' ORDER BY 销售金额 DESC LIMIT 10000</code>
+                        </div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" style="width: 0%"></div>
+                        </div>
+                        <div style="text-align: center; margin: 16px 0;">
+                            <button class="btn btn-success" style="padding: 8px 24px;">执行查询</button>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 16px;">
+                            <button class="btn btn-secondary">上一步</button>
+                            <button class="btn btn-success" style="display: none;">下一步</button>
+                        </div>
+                    </div>
+                    
+                    <!-- 步骤 4：查看结果 -->
+                    <div class="card" style="display: none;">
+                        <div class="card-title">步骤 4：查看结果</div>
+                        <div class="result-info">
+                            <strong>查询结果：</strong>找到 1,256 条记录，执行时间：0.8秒
+                        </div>
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>订单ID</th>
+                                    <th>销售日期</th>
+                                    <th>销售金额</th>
+                                    <th>地区</th>
+                                    <th>销售人员</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>ORD-2023-12345</td>
+                                    <td>2023-06-15</td>
+                                    <td>58,900.00</td>
+                                    <td>北京</td>
+                                    <td>张三</td>
+                                </tr>
+                                <tr>
+                                    <td>ORD-2023-12346</td>
+                                    <td>2023-06-16</td>
+                                    <td>45,600.00</td>
+                                    <td>北京</td>
+                                    <td>李四</td>
+                                </tr>
+                                <tr>
+                                    <td>ORD-2023-12347</td>
+                                    <td>2023-06-17</td>
+                                    <td>32,100.00</td>
+                                    <td>北京</td>
+                                    <td>张三</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                        <div style="display: flex; gap: 8px; margin-top: 16px;">
+                            <button class="btn btn-secondary">导出为Excel</button>
+                            <button class="btn btn-secondary">导出为CSV</button>
+                            <button class="btn btn-secondary">复制到剪贴板</button>
+                            <button class="btn btn-success">保存查询模板</button>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 16px;">
+                            <button class="btn btn-secondary">上一步</button>
+                            <button class="btn btn-success">完成</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 数据脱敏界面 -->
+                <div id="data-masking" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">数据脱敏</div>
+                        <div class="form-group">
+                            <label class="form-label">Excel文件</label>
+                            <input type="text" class="form-control" placeholder="请选择Excel文件">
+                            <button class="btn btn-secondary" style="margin-top: 8px;">浏览...</button>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">工作表</label>
+                            <select class="form-control">
+                                <option>客户信息</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">脱敏字段</label>
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>字段名称</th>
+                                        <th>数据类型</th>
+                                        <th>脱敏规则</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>姓名</td>
+                                        <td>文本</td>
+                                        <td>
+                                            <select class="form-control">
+                                                <option>隐藏姓</option>
+                                                <option>隐藏名</option>
+                                                <option>全部隐藏</option>
+                                                <option>自定义</option>
+                                            </select>
+                                        </td>
+                                        <td><input type="checkbox" checked></td>
+                                    </tr>
+                                    <tr>
+                                        <td>手机号</td>
+                                        <td>文本</td>
+                                        <td>
+                                            <select class="form-control">
+                                                <option>前三后四</option>
+                                                <option>中间四位</option>
+                                                <option>全部隐藏</option>
+                                                <option>自定义</option>
+                                            </select>
+                                        </td>
+                                        <td><input type="checkbox" checked></td>
+                                    </tr>
+                                    <tr>
+                                        <td>身份证号</td>
+                                        <td>文本</td>
+                                        <td>
+                                            <select class="form-control">
+                                                <option>前六后四</option>
+                                                <option>中间八位</option>
+                                                <option>全部隐藏</option>
+                                                <option>自定义</option>
+                                            </select>
+                                        </td>
+                                        <td><input type="checkbox" checked></td>
+                                    </tr>
+                                    <tr>
+                                        <td>邮箱</td>
+                                        <td>文本</td>
+                                        <td>
+                                            <select class="form-control">
+                                                <option>隐藏用户名</option>
+                                                <option>隐藏域名</option>
+                                                <option>全部隐藏</option>
+                                                <option>自定义</option>
+                                            </select>
+                                        </td>
+                                        <td><input type="checkbox" checked></td>
+                                    </tr>
+                                    <tr>
+                                        <td>地址</td>
+                                        <td>文本</td>
+                                        <td>
+                                            <select class="form-control">
+                                                <option>隐藏详细地址</option>
+                                                <option>只保留省份</option>
+                                                <option>全部隐藏</option>
+                                                <option>自定义</option>
+                                            </select>
+                                        </td>
+                                        <td><input type="checkbox"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">输出选项</label>
+                            <div style="display: flex; gap: 16px;">
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="radio" name="output" checked>
+                                    覆盖原文件
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="radio" name="output">
+                                    保存为新文件
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="radio" name="output">
+                                    导出为CSV
+                                </label>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; margin-top: 16px;">
+                            <button class="btn btn-success" style="flex: 1;">执行脱敏</button>
+                            <button class="btn">预览结果</button>
+                            <button class="btn">保存脱敏规则</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+            document.addEventListener('DOMContentLoaded', function() {
+                // 左侧导航栏点击事件
+                const sidebarItems = document.querySelectorAll('.sidebar-item');
+                sidebarItems.forEach(item => {
+                    item.addEventListener('click', function() {
+                        // 移除所有active类
+                        sidebarItems.forEach(i => i.classList.remove('active'));
+                        // 添加当前项的active类
+                        this.classList.add('active');
+                        
+                        // 根据项文本切换内容
+                        const itemText = this.textContent.trim();
+                        const tabContents = document.querySelectorAll('.tab-content');
+                        tabContents.forEach(content => content.style.display = 'none');
+                        
+                        if (itemText === '文件分析') {
+                            document.getElementById('file-analysis').style.display = 'block';
+                        } else if (itemText === '工作表分析') {
+                            document.getElementById('worksheet-analysis').style.display = 'block';
+                        } else if (itemText === '单表查询') {
+                            document.getElementById('single-table-query').style.display = 'block';
+                        } else if (itemText === '单表统计') {
+                            document.getElementById('single-table-stats').style.display = 'block';
+                        } else if (itemText === '数据脱敏') {
+                            document.getElementById('data-masking').style.display = 'block';
+                        }
+                    });
+                });
+                
+                // 功能区按钮点击事件
+                const ribbonButtons = document.querySelectorAll('.ribbon-btn');
+                ribbonButtons.forEach(button => {
+                    button.addEventListener('click', function() {
+                        // 移除所有active类
+                        ribbonButtons.forEach(b => b.classList.remove('active'));
+                        // 添加当前按钮的active类
+                        this.classList.add('active');
+                        
+                        // 根据按钮文本切换内容
+                        const buttonText = this.textContent.trim();
+                        const tabContents = document.querySelectorAll('.tab-content');
+                        tabContents.forEach(content => content.style.display = 'none');
+                        
+                        if (buttonText === '文件分析') {
+                            document.getElementById('file-analysis').style.display = 'block';
+                        } else if (buttonText === '工作表分析') {
+                            document.getElementById('worksheet-analysis').style.display = 'block';
+                        } else if (buttonText === '单表查询') {
+                            document.getElementById('single-table-query').style.display = 'block';
+                        } else if (buttonText === '多表关联查询') {
+                            document.getElementById('multi-table-query').style.display = 'block';
+                        } else if (buttonText === '全局搜索') {
+                            document.getElementById('global-search').style.display = 'block';
+                        } else if (buttonText === '单表统计') {
+                            document.getElementById('single-table-stats').style.display = 'block';
+                        } else if (buttonText === '多表关联统计') {
+                            document.getElementById('multi-table-stats').style.display = 'block';
+                        } else if (buttonText === '自定义统计') {
+                            document.getElementById('custom-stats').style.display = 'block';
+                        } else if (buttonText === '单表分拆') {
+                            document.getElementById('single-table-split').style.display = 'block';
+                        } else if (buttonText === '多表关联分拆') {
+                            document.getElementById('multi-table-split').style.display = 'block';
+                        } else if (buttonText === 'SQL脚本生成') {
+                            document.getElementById('sql-generator').style.display = 'block';
+                        } else if (buttonText === '数据脱敏') {
+                            document.getElementById('data-masking').style.display = 'block';
+                        } else if (buttonText === '权限设置') {
+                            document.getElementById('permission-setting').style.display = 'block';
+                        }
+                    });
+                });
+                
+                // 模拟分析按钮点击效果
+                const analyzeBtn = document.querySelector('.btn-success');
+                if (analyzeBtn) {
+                    analyzeBtn.addEventListener('click', function() {
+                        // 显示加载动画
+                        this.innerHTML = '<div class="loading"></div> 分析中...';
+                        
+                        // 模拟分析过程
+                        setTimeout(() => {
+                            this.innerHTML = '开始分析';
+                            // 可以在这里添加分析完成的逻辑
+                        }, 2000);
+                    });
+                }
+                
+                // 步骤导航逻辑
+                const nextButtons = document.querySelectorAll('.btn-success');
+                nextButtons.forEach(button => {
+                    button.addEventListener('click', function() {
+                        // 找到当前步骤
+                        const currentStep = this.closest('.card').previousElementSibling;
+                        if (currentStep && currentStep.classList.contains('steps')) {
+                            const activeStep = currentStep.querySelector('.step.active');
+                            const nextStep = activeStep.nextElementSibling;
+                            if (nextStep) {
+                                activeStep.classList.remove('active');
+                                nextStep.classList.add('active');
+                                
+                                // 显示下一个卡片
+                                const currentCard = this.closest('.card');
+                                const nextCard = currentCard.nextElementSibling;
+                                if (nextCard && nextCard.classList.contains('card')) {
+                                    currentCard.style.display = 'none';
+                                    nextCard.style.display = 'block';
+                                }
+                            }
+                        }
+                    });
+                });
+                
+                // 上一步按钮逻辑
+                const prevButtons = document.querySelectorAll('.btn-secondary');
+                prevButtons.forEach(button => {
+                    button.addEventListener('click', function() {
+                        // 找到当前步骤
+                        const currentStep = this.closest('.card').previousElementSibling;
+                        if (currentStep && currentStep.classList.contains('steps')) {
+                            const activeStep = currentStep.querySelector('.step.active');
+                            const prevStep = activeStep.previousElementSibling;
+                            if (prevStep) {
+                                activeStep.classList.remove('active');
+                                prevStep.classList.add('active');
+                                
+                                // 显示上一个卡片
+                                const currentCard = this.closest('.card');
+                                const prevCard = currentCard.previousElementSibling;
+                                if (prevCard && prevCard.classList.contains('card')) {
+                                    currentCard.style.display = 'none';
+                                    prevCard.style.display = 'block';
+                                }
+                            }
+                        }
+                    });
+                });
+            });
+        </script>
+    </body>
+</html>
+                                            <td><input type="checkbox"></td>
+                                        </tr>
+                                        <tr>
+                                            <td>客户ID</td>
+                                            <td><input type="checkbox"></td>
+                                            <td><input type="checkbox" checked></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 16px;">
+                            <button class="btn btn-secondary">上一步</button>
+                            <button class="btn btn-success">下一步</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 多表关联查询向导 -->
+                <div id="multi-table-query" class="tab-content" style="display: none;">
+                    <div class="steps">
+                        <div class="step active">
+                            <div class="step-number">1</div>
+                            <div>选择工作表</div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">2</div>
+                            <div>设置关联条件</div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">3</div>
+                            <div>设置查询条件</div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">4</div>
+                            <div>执行查询</div>
+                        </div>
+                        <div class="step">
+                            <div class="step-number">5</div>
+                            <div>查看结果</div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">步骤 1：选择工作表</div>
+                        <div class="form-group">
+                            <label class="form-label">Excel文件</label>
+                            <input type="text" class="form-control" value="销售数据.xlsx" readonly>
+                            <button class="btn btn-secondary" style="margin-top: 8px;">浏览...</button>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">主表</label>
+                            <select class="form-control">
+                                <option>销售明细</option>
+                                <option>产品信息</option>
+                                <option>客户信息</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">关联表</label>
+                            <select class="form-control">
+                                <option>产品信息</option>
+                                <option>客户信息</option>
+                            </select>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 16px;">
+                            <button class="btn btn-secondary">上一步</button>
+                            <button class="btn btn-success">下一步</button>
+                        </div>
+                    </div>
+                    
+                    <!-- 步骤 2：设置关联条件 -->
+                    <div class="card" style="display: none;">
+                        <div class="card-title">步骤 2：设置关联条件</div>
+                        <div class="join-config">
+                            <h5>关联设置</h5>
+                            <div style="display: flex; gap: 16px; align-items: center; margin: 12px 0;">
+                                <select class="form-control">
+                                    <option>销售明细.产品ID</option>
+                                </select>
+                                <select class="form-control">
+                                    <option>=</option>
+                                    <option>></option>
+                                    <option><</option>
+                                </select>
+                                <select class="form-control">
+                                    <option>产品信息.产品ID</option>
+                                </select>
+                                <select class="form-control">
+                                    <option>INNER JOIN</option>
+                                    <option>LEFT JOIN</option>
+                                    <option>RIGHT JOIN</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-secondary">添加关联表</button>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">选择字段</label>
+                            <div style="display: flex; gap: 16px;">
+                                <div style="flex: 1;">
+                                    <h5>可用字段</h5>
+                                    <select class="form-control" multiple style="height: 200px;">
+                                        <option>销售明细.订单ID</option>
+                                        <option>销售明细.销售日期</option>
+                                        <option>销售明细.销售金额</option>
+                                        <option>销售明细.数量</option>
+                                        <option>产品信息.产品名称</option>
+                                        <option>产品信息.类别</option>
+                                        <option>产品信息.单价</option>
+                                    </select>
+                                </div>
+                                <div style="display: flex; flex-direction: column; justify-content: center; gap: 8px;">
+                                    <button class="btn">></button>
+                                    <button class="btn"><</button>
+                                    <button class="btn">>></button>
+                                    <button class="btn"><<</button>
+                                </div>
+                                <div style="flex: 1;">
+                                    <h5>已选字段</h5>
+                                    <select class="form-control" multiple style="height: 200px;">
+                                        <option>销售明细.订单ID</option>
+                                        <option>销售明细.销售日期</option>
+                                        <option>销售明细.销售金额</option>
+                                        <option>产品信息.产品名称</option>
+                                        <option>产品信息.类别</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="display: flex; justify-content: space-between; margin-top: 16px;">
+                            <button class="btn btn-secondary">上一步</button>
+                            <button class="btn btn-success">下一步</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 数据脱敏界面 -->
+                <div id="data-masking" class="tab-content" style="display: none;">
+                    <div class="card">
+                        <div class="card-title">数据脱敏</div>
+                        <div class="form-group">
+                            <label class="form-label">Excel文件</label>
+                            <input type="text" class="form-control" placeholder="请选择Excel文件">
+                            <button class="btn btn-secondary" style="margin-top: 8px;">浏览...</button>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">工作表</label>
+                            <select class="form-control">
+                                <option>客户信息</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">脱敏字段</label>
+                            <table class="table">
+                                <thead>
+                                    <tr>
+                                        <th>字段名称</th>
+                                        <th>数据类型</th>
+                                        <th>脱敏规则</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>姓名</td>
+                                        <td>文本</td>
+                                        <td>
+                                            <select class="form-control">
+                                                <option>隐藏姓</option>
+                                                <option>隐藏名</option>
+                                                <option>全部隐藏</option>
+                                                <option>自定义</option>
+                                            </select>
+                                        </td>
+                                        <td><input type="checkbox" checked></td>
+                                    </tr>
+                                    <tr>
+                                        <td>手机号</td>
+                                        <td>文本</td>
+                                        <td>
+                                            <select class="form-control">
+                                                <option>前三后四</option>
+                                                <option>中间四位</option>
+                                                <option>全部隐藏</option>
+                                                <option>自定义</option>
+                                            </select>
+                                        </td>
+                                        <td><input type="checkbox" checked></td>
+                                    </tr>
+                                    <tr>
+                                        <td>身份证号</td>
+                                        <td>文本</td>
+                                        <td>
+                                            <select class="form-control">
+                                                <option>前六后四</option>
+                                                <option>中间八位</option>
+                                                <option>全部隐藏</option>
+                                                <option>自定义</option>
+                                            </select>
+                                        </td>
+                                        <td><input type="checkbox" checked></td>
+                                    </tr>
+                                    <tr>
+                                        <td>邮箱</td>
+                                        <td>文本</td>
+                                        <td>
+                                            <select class="form-control">
+                                                <option>隐藏用户名</option>
+                                                <option>隐藏域名</option>
+                                                <option>全部隐藏</option>
+                                                <option>自定义</option>
+                                            </select>
+                                        </td>
+                                        <td><input type="checkbox" checked></td>
+                                    </tr>
+                                    <tr>
+                                        <td>地址</td>
+                                        <td>文本</td>
+                                        <td>
+                                            <select class="form-control">
+                                                <option>隐藏详细地址</option>
+                                                <option>只保留省份</option>
+                                                <option>全部隐藏</option>
+                                                <option>自定义</option>
+                                            </select>
+                                        </td>
+                                        <td><input type="checkbox"></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">输出选项</label>
+                            <div style="display: flex; gap: 16px;">
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="radio" name="output" checked>
+                                    覆盖原文件
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="radio" name="output">
+                                    保存为新文件
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="radio" name="output">
+                                    导出为CSV
+                                </label>
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; margin-top: 16px;">
+                            <button class="btn btn-success" style="flex: 1;">执行脱敏</button>
+                            <button class="btn">预览结果</button>
+                            <button class="btn">保存脱敏规则</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 状态栏 -->
+        <div style="background-color: #f8f9fa; border-top: 1px solid #e1e4e8; padding: 4px 16px; font-size: 11px; color: #666; display: flex; justify-content: space-between; box-shadow: 0 -1px 3px rgba(0,0,0,0.05);">
+            <div>就绪</div>
+            <div>
+                <span class="highlight">ExcelSQLite v1.0.0</span> | 处理速度: <span class="highlight">100,000行/秒</span> | 内存使用: <span class="highlight">256MB</span>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 切换标签页
+        document.addEventListener('DOMContentLoaded', function() {
+            // 功能区按钮点击事件
+            const ribbonButtons = document.querySelectorAll('.ribbon-btn');
+            ribbonButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    // 移除所有按钮的active类
+                    ribbonButtons.forEach(btn => btn.classList.remove('active'));
+                    // 添加当前按钮的active类
+                    this.classList.add('active');
+                    
+                    // 根据按钮文本切换内容
+                    const buttonText = this.textContent.trim();
+                    const tabContents = document.querySelectorAll('.tab-content');
+                    tabContents.forEach(content => content.style.display = 'none');
+                    
+                    if (buttonText === '工作表分析') {
+                        document.getElementById('worksheet-analysis').style.display = 'block';
+                    } else if (buttonText === '单表查询') {
+                        document.getElementById('single-table-query').style.display = 'block';
+                    } else if (buttonText === '单表统计') {
+                        document.getElementById('single-table-stats').style.display = 'block';
+                    } else if (buttonText === '多表关联查询') {
+                        document.getElementById('multi-table-query').style.display = 'block';
+                    } else if (buttonText === '数据脱敏') {
+                        document.getElementById('data-masking').style.display = 'block';
+                    }
+                });
+            });
+            
+            // 左侧导航点击事件
+            const sidebarItems = document.querySelectorAll('.sidebar-item');
+            sidebarItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    // 移除所有项的active类
+                    sidebarItems.forEach(i => i.classList.remove('active'));
+                    // 添加当前项的active类
+                    this.classList.add('active');
+                    
+                    // 根据项文本切换内容
+                    const itemText = this.textContent.trim();
+                    const tabContents = document.querySelectorAll('.tab-content');
+                    tabContents.forEach(content => content.style.display = 'none');
+                    
+                    if (itemText === '工作表分析') {
+                        document.getElementById('worksheet-analysis').style.display = 'block';
+                    } else if (itemText === '单表查询') {
+                        document.getElementById('single-table-query').style.display = 'block';
+                    } else if (itemText === '单表统计') {
+                        document.getElementById('single-table-stats').style.display = 'block';
+                    } else if (itemText === '多表关联查询') {
+                        document.getElementById('multi-table-query').style.display = 'block';
+                    } else if (itemText === '数据脱敏') {
+                        document.getElementById('data-masking').style.display = 'block';
+                    }
+                });
+            });
+            
+            // 模拟分析按钮点击效果
+            const analyzeBtn = document.querySelector('.btn-success');
+            if (analyzeBtn) {
+                analyzeBtn.addEventListener('click', function() {
+                    // 显示加载动画
+                    this.innerHTML = '<div class="loading"></div> 分析中...';
+                    
+                    // 模拟分析过程
+                    setTimeout(() => {
+                        this.innerHTML = '开始分析';
+                        // 可以在这里添加分析完成的逻辑
+                    }, 2000);
+                });
+            }
+            
+            // 步骤导航逻辑
+            const nextButtons = document.querySelectorAll('.btn-success');
+            nextButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    // 找到当前步骤
+                    const currentStep = this.closest('.card').previousElementSibling;
+                    if (currentStep && currentStep.classList.contains('steps')) {
+                        const activeStep = currentStep.querySelector('.step.active');
+                        const nextStep = activeStep.nextElementSibling;
+                        if (nextStep) {
+                            activeStep.classList.remove('active');
+                            nextStep.classList.add('active');
+                            
+                            // 显示下一个卡片
+                            const currentCard = this.closest('.card');
+                            const nextCard = currentCard.nextElementSibling;
+                            if (nextCard && nextCard.classList.contains('card')) {
+                                currentCard.style.display = 'none';
+                                nextCard.style.display = 'block';
+                            }
+                        }
+                    }
+                });
+            });
+            
+            // 上一步按钮逻辑
+            const prevButtons = document.querySelectorAll('.btn-secondary');
+            prevButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    // 找到当前步骤
+                    const currentStep = this.closest('.card').previousElementSibling;
+                    if (currentStep && currentStep.classList.contains('steps')) {
+                        const activeStep = currentStep.querySelector('.step.active');
+                        const prevStep = activeStep.previousElementSibling;
+                        if (prevStep) {
+                            activeStep.classList.remove('active');
+                            prevStep.classList.add('active');
+                            
+                            // 显示上一个卡片
+                            const currentCard = this.closest('.card');
+                            const prevCard = currentCard.previousElementSibling;
+                            if (prevCard && prevCard.classList.contains('card')) {
+                                currentCard.style.display = 'none';
+                                prevCard.style.display = 'block';
+                            }
+                        }
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,1116 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ExcelSQLite · 数据清洗治理（P0/P1）界面原型</title>
+  <style>
+    :root{
+      --bg0:#0b1020;
+      --bg1:#0e1530;
+      --card:#0f1a33cc;
+      --card2:#0c142bb3;
+      --stroke:#ffffff14;
+      --stroke2:#ffffff1f;
+      --text:#eaf0ff;
+      --muted:#b9c6e8;
+      --muted2:#7e8bb0;
+      --brand:#4da3ff;
+      --ok:#48d19f;
+      --warn:#ffcc66;
+      --bad:#ff5c7a;
+      --vio:#b39bff;
+      --shadow: 0 18px 45px rgba(0,0,0,.45);
+      --shadow2: 0 10px 22px rgba(0,0,0,.36);
+      --r: 18px;
+      --r2: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: "Microsoft YaHei UI","Microsoft YaHei","Segoe UI",system-ui,-apple-system,Arial;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family:var(--sans);
+      color:var(--text);
+      background:
+        radial-gradient(1200px 600px at 15% 10%, rgba(77,163,255,.22), transparent 60%),
+        radial-gradient(900px 550px at 85% 25%, rgba(179,155,255,.18), transparent 55%),
+        radial-gradient(900px 600px at 70% 90%, rgba(72,209,159,.14), transparent 58%),
+        linear-gradient(180deg, var(--bg0), var(--bg1));
+      overflow:hidden;
+    }
+    .noise:before{
+      content:"";
+      position:fixed; inset:0;
+      pointer-events:none;
+      background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='260' height='260' filter='url(%23n)' opacity='.28'/%3E%3C/svg%3E");
+      mix-blend-mode:overlay;
+      opacity:.18;
+    }
+
+    /* Layout */
+    .app{
+      height:100%;
+      display:grid;
+      grid-template-columns: 320px 1fr;
+      grid-template-rows: 70px 1fr 46px;
+      grid-template-areas:
+        "rail top"
+        "rail main"
+        "rail foot";
+      gap:14px;
+      padding:14px;
+    }
+    .top{
+      grid-area:top;
+      border:1px solid var(--stroke);
+      border-radius: var(--r);
+      background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+      box-shadow: var(--shadow2);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding: 12px 14px;
+      position:relative;
+      overflow:hidden;
+    }
+    .top:after{
+      content:"";
+      position:absolute;
+      inset:-1px;
+      background:
+        linear-gradient(90deg, rgba(77,163,255,.18), transparent 45%),
+        linear-gradient(90deg, transparent 55%, rgba(179,155,255,.14));
+      pointer-events:none;
+      opacity:.8;
+    }
+    .brand{
+      display:flex; gap:12px; align-items:center;
+      position:relative; z-index:1;
+    }
+    .logo{
+      width:38px; height:38px; border-radius:14px;
+      background:
+        radial-gradient(18px 18px at 30% 30%, rgba(255,255,255,.45), transparent 70%),
+        linear-gradient(145deg, rgba(77,163,255,.95), rgba(179,155,255,.75));
+      box-shadow: 0 10px 25px rgba(77,163,255,.25);
+      border:1px solid rgba(255,255,255,.22);
+    }
+    .brand h1{
+      margin:0;
+      font-size: 14.5pt;
+      letter-spacing:.2px;
+      font-weight: 700;
+      line-height:1.15;
+    }
+    .brand .sub{
+      font-size: 9pt;
+      color: var(--muted);
+      margin-top:2px;
+    }
+    .top-right{
+      display:flex; gap:10px; align-items:center;
+      position:relative; z-index:1;
+    }
+    .chip{
+      display:inline-flex; align-items:center; gap:8px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.06);
+      border: 1px solid var(--stroke);
+      color: var(--muted);
+      font-size: 9pt;
+      backdrop-filter: blur(8px);
+      user-select:none;
+      white-space:nowrap;
+    }
+    .chip b{color:var(--text); font-weight:700}
+    .chip .dot{
+      width:8px; height:8px; border-radius:999px; background: var(--ok);
+      box-shadow: 0 0 0 4px rgba(72,209,159,.12);
+    }
+
+    .rail{
+      grid-area:rail;
+      border:1px solid var(--stroke);
+      border-radius: var(--r);
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      box-shadow: var(--shadow2);
+      overflow:hidden;
+      display:flex; flex-direction:column;
+      min-height:0;
+    }
+    .rail-head{
+      padding:14px 14px 10px;
+      border-bottom:1px solid var(--stroke);
+    }
+    .scenario{
+      display:flex; gap:10px; flex-wrap:wrap;
+      margin-top:10px;
+    }
+    .pill{
+      cursor:pointer;
+      user-select:none;
+      font-size:9pt;
+      padding:7px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--stroke);
+      background: rgba(255,255,255,.04);
+      color: var(--muted);
+      transition: .15s ease;
+    }
+    .pill:hover{ transform: translateY(-1px); border-color: var(--stroke2); background: rgba(255,255,255,.06);}
+    .pill.active{
+      color: var(--text);
+      border-color: rgba(77,163,255,.35);
+      background: linear-gradient(135deg, rgba(77,163,255,.18), rgba(179,155,255,.10));
+      box-shadow: 0 10px 24px rgba(77,163,255,.12);
+    }
+
+    .nav{
+      padding:10px;
+      display:flex;
+      flex-direction:column;
+      gap:8px;
+      overflow:auto;
+    }
+    .nav-item{
+      cursor:pointer;
+      border-radius: 14px;
+      border:1px solid transparent;
+      padding: 10px 10px;
+      display:flex; gap:10px; align-items:center;
+      transition: .16s ease;
+      user-select:none;
+    }
+    .nav-item:hover{
+      background: rgba(255,255,255,.05);
+      border-color: rgba(255,255,255,.08);
+    }
+    .nav-item.active{
+      background: linear-gradient(135deg, rgba(77,163,255,.16), rgba(179,155,255,.10));
+      border-color: rgba(77,163,255,.28);
+      box-shadow: 0 10px 20px rgba(0,0,0,.20);
+    }
+    .ico{
+      width:34px; height:34px; border-radius:12px;
+      display:grid; place-items:center;
+      background: rgba(255,255,255,.05);
+      border:1px solid rgba(255,255,255,.10);
+      color: var(--text);
+      flex:0 0 auto;
+    }
+    .ico svg{width:18px; height:18px; opacity:.9}
+    .nav-title{font-weight:800; font-size:10pt}
+    .nav-desc{font-size:8.5pt; color: var(--muted2); margin-top:2px; line-height:1.2}
+    .badge{
+      margin-left:auto;
+      font-size:8pt;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border:1px solid rgba(255,255,255,.12);
+      color: var(--muted);
+      background: rgba(255,255,255,.04);
+    }
+    .badge.p0{ border-color: rgba(72,209,159,.22); color: #c7ffe9; background: rgba(72,209,159,.08); }
+    .badge.p1{ border-color: rgba(255,204,102,.22); color: #fff1c7; background: rgba(255,204,102,.08); }
+
+    .foot{
+      grid-area:foot;
+      border:1px solid var(--stroke);
+      border-radius: var(--r);
+      background: rgba(255,255,255,.03);
+      box-shadow: var(--shadow2);
+      display:flex; align-items:center; justify-content:space-between;
+      padding: 10px 14px;
+      font-size: 9pt;
+      color: var(--muted);
+      overflow:hidden;
+    }
+    .foot .hint{
+      display:flex; align-items:center; gap:10px;
+    }
+    .kbd{
+      font-family: var(--mono);
+      font-size: 8.5pt;
+      padding: 4px 6px;
+      border-radius: 8px;
+      border:1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.18);
+      color: var(--text);
+    }
+    .main{
+      grid-area:main;
+      border:1px solid var(--stroke);
+      border-radius: var(--r);
+      background: rgba(255,255,255,.02);
+      box-shadow: var(--shadow);
+      overflow:hidden;
+      min-height:0;
+      position:relative;
+    }
+    .main-scroll{
+      height:100%;
+      overflow:auto;
+      padding: 14px;
+    }
+    .grid{
+      display:grid;
+      grid-template-columns: 1.1fr .9fr;
+      gap: 14px;
+      align-items:start;
+    }
+    .panel{
+      border-radius: var(--r);
+      border:1px solid var(--stroke);
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      box-shadow: var(--shadow2);
+      overflow:hidden;
+    }
+    .panel .ph{
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--stroke);
+      display:flex; align-items:center; justify-content:space-between; gap:10px;
+    }
+    .ph h2{
+      margin:0;
+      font-size: 11pt;
+      letter-spacing:.2px;
+    }
+    .ph .meta{
+      font-size: 8.5pt;
+      color: var(--muted);
+      white-space:nowrap;
+    }
+    .pb{ padding: 12px 14px; }
+    .row{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+
+    .field{
+      display:flex; flex-direction:column; gap:6px;
+      flex: 1 1 260px;
+      min-width: 220px;
+    }
+    label{
+      font-size: 8.5pt;
+      color: var(--muted);
+    }
+    input, select, textarea{
+      font: inherit;
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(0,0,0,.18);
+      border-radius: 12px;
+      padding: 10px 10px;
+      outline:none;
+      transition: .15s ease;
+    }
+    textarea{ min-height: 130px; font-family: var(--mono); font-size: 9pt; line-height: 1.5; }
+    input:focus, select:focus, textarea:focus{
+      border-color: rgba(77,163,255,.45);
+      box-shadow: 0 0 0 4px rgba(77,163,255,.10);
+    }
+    .btn{
+      cursor:pointer;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.05);
+      color: var(--text);
+      padding: 10px 10px;
+      font-weight: 700;
+      font-size: 9pt;
+      transition: .15s ease;
+      user-select:none;
+      white-space:nowrap;
+    }
+    .btn:hover{ transform: translateY(-1px); border-color: rgba(255,255,255,.24); background: rgba(255,255,255,.07); }
+    .btn.primary{
+      border-color: rgba(77,163,255,.35);
+      background: linear-gradient(135deg, rgba(77,163,255,.30), rgba(179,155,255,.12));
+      box-shadow: 0 10px 24px rgba(77,163,255,.12);
+    }
+    .btn.ok{
+      border-color: rgba(72,209,159,.28);
+      background: linear-gradient(135deg, rgba(72,209,159,.22), rgba(0,0,0,.12));
+    }
+    .btn.ghost{
+      background: transparent;
+      border-color: rgba(255,255,255,.12);
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .split{
+      display:flex; gap:10px; align-items:center; justify-content:space-between;
+      flex-wrap:wrap;
+    }
+    .kpi{
+      display:grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+    }
+    .kpi .card{
+      border-radius: 16px;
+      border: 1px solid var(--stroke);
+      background: rgba(0,0,0,.16);
+      padding: 10px 12px;
+      min-height: 78px;
+      position:relative;
+      overflow:hidden;
+    }
+    .kpi .card:after{
+      content:"";
+      position:absolute; inset:-1px;
+      background: radial-gradient(250px 80px at 20% 0%, rgba(77,163,255,.18), transparent 65%);
+      opacity:.8; pointer-events:none;
+    }
+    .kpi .t{ position:relative; z-index:1; font-size:8.5pt; color: var(--muted); }
+    .kpi .v{ position:relative; z-index:1; margin-top:6px; font-size: 16pt; font-weight: 900; letter-spacing:.2px; }
+    .kpi .s{ position:relative; z-index:1; margin-top:2px; font-size: 8.5pt; color: var(--muted2); }
+    .kpi .v.ok{ color: #bafbe6;}
+    .kpi .v.warn{ color: #ffe7b0;}
+    .kpi .v.bad{ color: #ffd0d9;}
+
+    .list{
+      display:flex; flex-direction:column; gap:10px;
+    }
+    .item{
+      border:1px solid var(--stroke);
+      border-radius: 14px;
+      background: rgba(0,0,0,.14);
+      padding: 10px 12px;
+      display:flex; gap:10px; align-items:flex-start;
+    }
+    .sev{
+      width:10px; height:10px; border-radius:999px;
+      margin-top:4px;
+      flex:0 0 auto;
+    }
+    .sev.ok{ background: var(--ok); box-shadow: 0 0 0 4px rgba(72,209,159,.12);}
+    .sev.warn{ background: var(--warn); box-shadow: 0 0 0 4px rgba(255,204,102,.12);}
+    .sev.bad{ background: var(--bad); box-shadow: 0 0 0 4px rgba(255,92,122,.12);}
+    .item .h{
+      font-weight: 900;
+      font-size: 9.5pt;
+      line-height: 1.25;
+    }
+    .item .d{
+      margin-top:3px;
+      color: var(--muted2);
+      font-size: 8.5pt;
+      line-height: 1.35;
+    }
+    .item .tag{
+      margin-left:auto;
+      font-size:8pt;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border:1px solid rgba(255,255,255,.12);
+      color: var(--muted);
+      background: rgba(255,255,255,.04);
+      white-space:nowrap;
+      align-self:flex-start;
+    }
+    .table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      overflow:hidden;
+      border:1px solid var(--stroke);
+      border-radius: 14px;
+      background: rgba(0,0,0,.14);
+    }
+    .table th,.table td{
+      padding: 9px 10px;
+      font-size: 8.5pt;
+      border-bottom:1px solid rgba(255,255,255,.08);
+      color: var(--muted);
+      text-align:left;
+      vertical-align:top;
+    }
+    .table th{ color: var(--text); background: rgba(255,255,255,.03); font-weight: 900; }
+    .table tr:last-child td{ border-bottom:none; }
+    .mono{ font-family: var(--mono); color: #dbe7ff; }
+    .muted{ color: var(--muted2); }
+
+    .view{ display:none; }
+    .view.active{ display:block; }
+
+    /* responsive */
+    @media (max-width: 1120px){
+      body{overflow:auto;}
+      .app{ grid-template-columns: 1fr; grid-template-areas:"top" "rail" "main" "foot"; grid-template-rows:auto auto 1fr auto; }
+      .grid{ grid-template-columns:1fr; }
+      .kpi{ grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body class="noise">
+  <div class="app">
+    <aside class="rail">
+      <div class="rail-head">
+        <div style="display:flex; gap:10px; align-items:center;">
+          <div class="logo" aria-hidden="true"></div>
+          <div>
+            <div style="font-weight:900; font-size: 11pt; letter-spacing:.2px;">清洗治理中心</div>
+            <div style="font-size:8.5pt; color:var(--muted2); margin-top:2px;">只做 P0 / P1：规则、剖析、执行、发布</div>
+          </div>
+        </div>
+        <div class="scenario" id="scenario">
+          <div class="pill active" data-s="config">基础配置 / 映射</div>
+          <div class="pill" data-s="biz">业务单据记录</div>
+          <div class="pill" data-s="join">配置↔业务关联</div>
+        </div>
+      </div>
+
+      <nav class="nav" id="nav">
+        <div class="nav-item active" data-view="v_profile">
+          <div class="ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M4 5.5C4 4.12 5.12 3 6.5 3h6.7c.4 0 .78.16 1.06.44l3.3 3.3c.28.28.44.66.44 1.06V18.5c0 1.38-1.12 2.5-2.5 2.5h-9C5.12 21 4 19.88 4 18.5V5.5Z" stroke="currentColor" stroke-width="1.6"/><path d="M13 3v4.2c0 .44.36.8.8.8H18" stroke="currentColor" stroke-width="1.6"/><path d="M7 12h8M7 15h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <div class="nav-title">数据剖析（Profiling）</div>
+            <div class="nav-desc">空值率 / 唯一值 / TopN / 类型可解析率 / 覆盖率</div>
+          </div>
+          <div class="badge p0">P0</div>
+        </div>
+
+        <div class="nav-item" data-view="v_rules">
+          <div class="ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M7 3h10a2 2 0 0 1 2 2v4H5V5a2 2 0 0 1 2-2Z" stroke="currentColor" stroke-width="1.6"/><path d="M5 9h14v10a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V9Z" stroke="currentColor" stroke-width="1.6"/><path d="M8 12h8M8 15h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <div class="nav-title">规则集（RuleSet）</div>
+            <div class="nav-desc">模板/参数化/版本化；沉淀到本地库，发布时导出 JSON</div>
+          </div>
+          <div class="badge p0">P0</div>
+        </div>
+
+        <div class="nav-item" data-view="v_run">
+          <div class="ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M7 4.5v15" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M10 6.5h10M10 10.5h10M10 14.5h10M10 18.5h10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M5.2 5.4 7 4l1.8 1.4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div>
+            <div class="nav-title">执行清洗（Run）</div>
+            <div class="nav-desc">预览 Diff → 正式执行；支持“按主键去重/保留最新”等 P1</div>
+          </div>
+          <div class="badge p1">P1</div>
+        </div>
+
+        <div class="nav-item" data-view="v_mapping">
+          <div class="ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M8 7h8M8 12h8M8 17h8" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M5 5.5A2.5 2.5 0 0 1 7.5 3h9A2.5 2.5 0 0 1 19 5.5v13A2.5 2.5 0 0 1 16.5 21h-9A2.5 2.5 0 0 1 5 18.5v-13Z" stroke="currentColor" stroke-width="1.6"/></svg>
+          </div>
+          <div>
+            <div class="nav-title">映射治理（P0核心）</div>
+            <div class="nav-desc">覆盖率 / 冲突 / 参照完整性；生成“缺口清单”给 Excel 修订</div>
+          </div>
+          <div class="badge p0">P0</div>
+        </div>
+
+        <div class="nav-item" data-view="v_publish">
+          <div class="ico" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none"><path d="M12 3v10" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M8 9l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 15v3a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          </div>
+          <div>
+            <div class="nav-title">发布包（Publish）</div>
+            <div class="nav-desc">同目录输出 ruleset.json / 报告 xlsx / outputs / rollback</div>
+          </div>
+          <div class="badge p0">P0</div>
+        </div>
+      </nav>
+    </aside>
+
+    <header class="top">
+      <div class="brand">
+        <div>
+          <h1>Excel + SQLite 清洗治理原型</h1>
+          <div class="sub">基于当前工程原型重绘：只展示 P0/P1 能做的“规则—剖析—执行—发布”闭环</div>
+        </div>
+      </div>
+      <div class="top-right">
+        <div class="chip"><span class="dot"></span> 数据引擎：<b>SQLite 临时库</b></div>
+        <div class="chip">规则库：<b>本地治理库</b> + 发布时导出到<b>Excel同目录</b></div>
+        <button class="btn primary" onclick="toast('这是界面原型：交互与按钮为演示，不触发真实处理。')">查看说明</button>
+      </div>
+    </header>
+
+    <main class="main">
+      <div class="main-scroll">
+        <!-- View: Profiling -->
+        <section class="view active" id="v_profile">
+          <div class="grid">
+            <div class="panel">
+              <div class="ph">
+                <h2>数据源与剖析范围</h2>
+                <div class="meta">目标：先量化问题，再谈清洗</div>
+              </div>
+              <div class="pb">
+                <div class="row">
+                  <div class="field">
+                    <label>输入文件（Excel）</label>
+                    <input value="D:\\data\\主数据_组织映射.xlsx" />
+                  </div>
+                  <div class="field">
+                    <label>导入到 SQLite（表名）</label>
+                    <input value="Main" />
+                  </div>
+                </div>
+                <div class="row" style="margin-top:10px;">
+                  <div class="field">
+                    <label>主键（可选，用于去重/对齐/差异）</label>
+                    <input value="OrgCode" />
+                  </div>
+                  <div class="field">
+                    <label>剖析策略</label>
+                    <select>
+                      <option>快速（TopN + 空值率 + 可解析率）</option>
+                      <option selected>治理（含覆盖率/冲突/参照完整性）</option>
+                      <option>深度（抽样 + 分布 + 异常检测）</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="split" style="margin-top:12px;">
+                  <div class="row">
+                    <button class="btn primary" onclick="toast('演示：开始剖析（P0）')">开始剖析</button>
+                    <button class="btn ghost" onclick="toast('演示：导出 profiling_report.xlsx')">导出剖析报告</button>
+                    <button class="btn ghost" onclick="toast('演示：刷新字段列表')">刷新字段</button>
+                  </div>
+                  <div class="chip">最近一次：<b>runId=20260406_0722</b></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="ph">
+                <h2>质量总览（P0）</h2>
+                <div class="meta">可作为发布门禁（但不做审批 P2）</div>
+              </div>
+              <div class="pb">
+                <div class="kpi">
+                  <div class="card">
+                    <div class="t">空值率</div>
+                    <div class="v warn">8.7%</div>
+                    <div class="s">建议：先补齐关键码</div>
+                  </div>
+                  <div class="card">
+                    <div class="t">映射覆盖率</div>
+                    <div class="v bad">92.1%</div>
+                    <div class="s">缺口：37 个 code</div>
+                  </div>
+                  <div class="card">
+                    <div class="t">冲突映射</div>
+                    <div class="v warn">12</div>
+                    <div class="s">一对多 / 多对一</div>
+                  </div>
+                  <div class="card">
+                    <div class="t">参照失败</div>
+                    <div class="v bad">9</div>
+                    <div class="s">引用不存在</div>
+                  </div>
+                </div>
+                <div style="margin-top:12px;" class="list" id="issueList">
+                  <!-- filled by JS -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- View: Rules -->
+        <section class="view" id="v_rules">
+          <div class="grid">
+            <div class="panel">
+              <div class="ph">
+                <h2>规则集（RuleSet）</h2>
+                <div class="meta">本地治理库沉淀 + 发布包导出</div>
+              </div>
+              <div class="pb">
+                <div class="row">
+                  <div class="field">
+                    <label>选择模板（固化 + 可参数化）</label>
+                    <select id="tplSel">
+                      <option value="cfg" selected>基础配置/映射治理模板（P0）</option>
+                      <option value="biz">业务单据清洗模板（P0/P1）</option>
+                      <option value="join">配置↔业务关联清理模板（P0/P1）</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>规则集版本</label>
+                    <input value="v1.3.0 · 2026-04-06" />
+                  </div>
+                </div>
+
+                <div class="row" style="margin-top:10px;">
+                  <button class="btn primary" onclick="toast('演示：保存为新版本（写入治理库）')">保存版本</button>
+                  <button class="btn ghost" onclick="toast('演示：导出 ruleset.json（发布包）')">导出 ruleset.json</button>
+                  <button class="btn ghost" onclick="toast('演示：导入规则集')">导入规则集</button>
+                </div>
+
+                <div style="margin-top:12px;">
+                  <table class="table">
+                    <thead><tr><th style="width:120px;">层级</th><th>规则项</th><th style="width:120px;">优先级</th><th style="width:80px;">启用</th></tr></thead>
+                    <tbody id="ruleTable"></tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="ph">
+                <h2>规则参数（灵活多变）</h2>
+                <div class="meta">同一模板在不同项目只改参数</div>
+              </div>
+              <div class="pb">
+                <div class="row">
+                  <div class="field">
+                    <label>主键字段（去重/对齐）</label>
+                    <input value="OrgCode" />
+                  </div>
+                  <div class="field">
+                    <label>保留策略（P1）</label>
+                    <select>
+                      <option selected>保留最新（按 UpdatedAt DESC）</option>
+                      <option>保留最大（按 Priority DESC）</option>
+                      <option>保留第一条</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="row" style="margin-top:10px;">
+                  <div class="field">
+                    <label>映射表</label>
+                    <select>
+                      <option selected>OrgMap（源OrgCode → 标准OrgId）</option>
+                      <option>DeptMap（源DeptCode → 标准DeptId）</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>覆盖率阈值（P0门槛）</label>
+                    <select>
+                      <option>95%</option>
+                      <option selected>98%</option>
+                      <option>100%（严格）</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div style="margin-top:12px;">
+                  <label>规则集 JSON（发布包内会写入 ruleset.json）</label>
+                  <textarea id="ruleJson" spellcheck="false"></textarea>
+                  <div class="row" style="margin-top:10px;">
+                    <button class="btn ok" onclick="toast('演示：校验 JSON（结构+参数）')">校验</button>
+                    <button class="btn ghost" onclick="toast('演示：格式化 JSON')">格式化</button>
+                    <button class="btn ghost" onclick="toast('演示：从当前 UI 回填 JSON')">从界面生成</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- View: Run -->
+        <section class="view" id="v_run">
+          <div class="grid">
+            <div class="panel">
+              <div class="ph">
+                <h2>预览 Diff（建议先预览再执行）</h2>
+                <div class="meta">P1：按主键对齐、保留最新、局部修复</div>
+              </div>
+              <div class="pb">
+                <div class="row">
+                  <div class="field">
+                    <label>运行模式</label>
+                    <select>
+                      <option selected>预览（Diff + 抽样）</option>
+                      <option>正式执行（生成 Cleansed + 导出）</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>输出方式</label>
+                    <select>
+                      <option selected>生成新文件（推荐）</option>
+                      <option>覆盖原文件（强制备份）</option>
+                      <option>仅生成 SQLite 表（不导出）</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="row" style="margin-top:10px;">
+                  <button class="btn primary" onclick="toast('演示：运行预览（Diff 抽样）')">运行预览</button>
+                  <button class="btn ok" onclick="toast('演示：正式执行并导出 outputs')">正式执行</button>
+                  <button class="btn ghost" onclick="toast('演示：取消执行')">取消</button>
+                </div>
+
+                <div style="margin-top:12px;">
+                  <table class="table">
+                    <thead><tr><th style="width:160px;">影响项</th><th>说明</th><th style="width:120px;">数量</th></tr></thead>
+                    <tbody>
+                      <tr><td class="mono">TRIM / 标准化</td><td class="muted">去前后空格、统一大小写、统一编码格式</td><td class="mono">1,382</td></tr>
+                      <tr><td class="mono">按主键去重</td><td class="muted">OrgCode 重复保留最新 UpdatedAt</td><td class="mono">57</td></tr>
+                      <tr><td class="mono">映射缺口</td><td class="muted">无法映射的 OrgCode（需修订映射表）</td><td class="mono">37</td></tr>
+                      <tr><td class="mono">冲突</td><td class="muted">同一源码映射多目标（需裁决）</td><td class="mono">12</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="ph">
+                <h2>Diff 抽样（可导出）</h2>
+                <div class="meta">输出 diff_report.xlsx（发布包）</div>
+              </div>
+              <div class="pb">
+                <table class="table">
+                  <thead><tr><th style="width:120px;">主键</th><th>字段</th><th>清洗前</th><th>清洗后</th></tr></thead>
+                  <tbody>
+                    <tr><td class="mono">BJ-001</td><td>OrgName</td><td>北京市&nbsp;</td><td>北京市</td></tr>
+                    <tr><td class="mono">BJ-002</td><td>Region</td><td>北京</td><td>北京市</td></tr>
+                    <tr><td class="mono">SZ-019</td><td>StdOrgId</td><td class="muted">NULL</td><td class="bad">（缺失映射）</td></tr>
+                  </tbody>
+                </table>
+                <div class="row" style="margin-top:10px;">
+                  <button class="btn ghost" onclick="toast('演示：导出 diff_report.xlsx')">导出 Diff 报告</button>
+                  <button class="btn ghost" onclick="toast('演示：打开缺口清单（给业务修订）')">打开缺口清单</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- View: Mapping -->
+        <section class="view" id="v_mapping">
+          <div class="grid">
+            <div class="panel">
+              <div class="ph">
+                <h2>覆盖率 / 缺口清单（P0）</h2>
+                <div class="meta">核心产物：缺口 Excel（给业务快速补齐）</div>
+              </div>
+              <div class="pb">
+                <div class="row">
+                  <div class="field">
+                    <label>主数据字段（源码）</label>
+                    <select>
+                      <option selected>OrgCode</option>
+                      <option>DeptCode</option>
+                      <option>ProductCode</option>
+                    </select>
+                  </div>
+                  <div class="field">
+                    <label>映射表</label>
+                    <select>
+                      <option selected>OrgMap（OrgCode → StdOrgId）</option>
+                      <option>DeptMap（DeptCode → StdDeptId）</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="row" style="margin-top:10px;">
+                  <button class="btn primary" onclick="toast('演示：生成缺口清单（missing mappings）')">生成缺口清单</button>
+                  <button class="btn ghost" onclick="toast('演示：导出 mapping_gap.xlsx')">导出缺口 Excel</button>
+                  <button class="btn ghost" onclick="toast('演示：从修订后的 Excel 回导映射表')">回导修订结果</button>
+                </div>
+                <div style="margin-top:12px;">
+                  <table class="table">
+                    <thead><tr><th style="width:140px;">缺失OrgCode</th><th>出现次数</th><th>建议StdOrgId（可留空）</th><th style="width:110px;">状态</th></tr></thead>
+                    <tbody>
+                      <tr><td class="mono">SZ-019</td><td class="mono">128</td><td class="muted">（需业务补齐）</td><td><span class="tag">待补齐</span></td></tr>
+                      <tr><td class="mono">GD-007</td><td class="mono">41</td><td class="muted">（需业务补齐）</td><td><span class="tag">待补齐</span></td></tr>
+                      <tr><td class="mono">HN-002</td><td class="mono">9</td><td class="muted">（需业务补齐）</td><td><span class="tag">待补齐</span></td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="ph">
+                <h2>冲突与参照完整性（P0）</h2>
+                <div class="meta">一对多 / 多对一 / 引用不存在</div>
+              </div>
+              <div class="pb">
+                <div class="list">
+                  <div class="item">
+                    <div class="sev warn"></div>
+                    <div>
+                      <div class="h">冲突：同一 OrgCode 映射到多个 StdOrgId</div>
+                      <div class="d mono">OrgCode=BJ-002 → {StdOrgId=1001, 1009}</div>
+                    </div>
+                    <div class="tag">需要裁决</div>
+                  </div>
+                  <div class="item">
+                    <div class="sev bad"></div>
+                    <div>
+                      <div class="h">参照失败：映射表引用的 StdOrgId 不存在于字典表</div>
+                      <div class="d mono">StdOrgId=9012（OrgDict 缺失）</div>
+                    </div>
+                    <div class="tag">必须修复</div>
+                  </div>
+                  <div class="item">
+                    <div class="sev ok"></div>
+                    <div>
+                      <div class="h">一致性：同义归一规则命中</div>
+                      <div class="d">“北京/北京市/京” 已统一归一到 “北京市”</div>
+                    </div>
+                    <div class="tag">已应用</div>
+                  </div>
+                </div>
+                <div class="row" style="margin-top:10px;">
+                  <button class="btn ghost" onclick="toast('演示：导出 conflict_report.xlsx')">导出冲突清单</button>
+                  <button class="btn ghost" onclick="toast('演示：导出 referential_report.xlsx')">导出参照问题</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- View: Publish -->
+        <section class="view" id="v_publish">
+          <div class="grid">
+            <div class="panel">
+              <div class="ph">
+                <h2>发布包（同 Excel 同目录）</h2>
+                <div class="meta">C 方案：本地沉淀 + 发布时打包</div>
+              </div>
+              <div class="pb">
+                <div class="row">
+                  <div class="field">
+                    <label>发布目录（示例）</label>
+                    <input value="D:\\data\\.xslq_publish\\20260406_0722_cfg_v1.3.0\\" />
+                  </div>
+                </div>
+                <div class="row" style="margin-top:10px;">
+                  <button class="btn primary" onclick="toast('演示：生成发布包（P0）')">生成发布包</button>
+                  <button class="btn ghost" onclick="toast('演示：打开发布目录')">打开目录</button>
+                  <button class="btn ghost" onclick="toast('演示：生成 rollback 材料')">生成回滚材料</button>
+                </div>
+                <div style="margin-top:12px;">
+                  <table class="table">
+                    <thead><tr><th style="width:240px;">文件/目录</th><th>说明</th></tr></thead>
+                    <tbody>
+                      <tr><td class="mono">inputs.json</td><td class="muted">输入文件路径/hash/工作表/导入参数</td></tr>
+                      <tr><td class="mono">ruleset.json</td><td class="muted">规则集（版本+参数），用于复现与审计</td></tr>
+                      <tr><td class="mono">profiling_report.xlsx</td><td class="muted">剖析报告（空值率/覆盖率/冲突/参照）</td></tr>
+                      <tr><td class="mono">cleansing_report.xlsx</td><td class="muted">执行报告（影响范围/统计/问题清单）</td></tr>
+                      <tr><td class="mono">diff_report.xlsx</td><td class="muted">Diff 抽样/关键字段变更</td></tr>
+                      <tr><td class="mono">outputs/cleansed.xlsx</td><td class="muted">清洗输出数据</td></tr>
+                      <tr><td class="mono">rollback/backup_original.xlsx</td><td class="muted">覆盖写回时的强制备份</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div class="panel">
+              <div class="ph">
+                <h2>模块拆分建议（先不定死）</h2>
+                <div class="meta">你说“可能要拆”，这里给可选切法</div>
+              </div>
+              <div class="pb">
+                <div class="list">
+                  <div class="item">
+                    <div class="sev ok"></div>
+                    <div>
+                      <div class="h">方案 A：按“治理能力”拆（推荐）</div>
+                      <div class="d">Profiling / RuleSet / Run / Publish 为核心模块；“映射治理”是 P0 强模块（可独立页）。</div>
+                    </div>
+                    <div class="tag">3~4 个模块</div>
+                  </div>
+                  <div class="item">
+                    <div class="sev warn"></div>
+                    <div>
+                      <div class="h">方案 B：按“业务场景”拆</div>
+                      <div class="d">配置映射 / 单据记录 / 关联清理 三条线，每条线内部再有 Profiling/Rule/Run/Publish。</div>
+                    </div>
+                    <div class="tag">易重复建设</div>
+                  </div>
+                  <div class="item">
+                    <div class="sev warn"></div>
+                    <div>
+                      <div class="h">方案 C：按“对象”拆</div>
+                      <div class="d">字典表治理、映射表治理、主数据治理、交易明细治理…优点清晰，缺点是对象会膨胀。</div>
+                    </div>
+                    <div class="tag">需强边界</div>
+                  </div>
+                </div>
+                <div class="row" style="margin-top:10px;">
+                  <button class="btn ghost" onclick="toast('建议：先做方案A，把治理闭环打通；场景用“模板/参数”适配。')">我建议怎么选</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <footer class="foot">
+      <div class="hint">
+        <span>原型快捷键：</span>
+        <span class="kbd">1~5</span><span class="muted">切换左侧模块</span>
+        <span class="kbd">C</span><span class="muted">切换场景</span>
+      </div>
+      <div class="muted">注：这是 UI 原型（HTML），用于对齐“P0/P1 能力边界 + 规则化治理流程”。</div>
+    </footer>
+  </div>
+
+  <div id="toast" style="position:fixed; right:16px; bottom:16px; display:flex; flex-direction:column; gap:10px; z-index:9999;"></div>
+
+  <script>
+    const $ = (q, root=document) => root.querySelector(q);
+    const $$ = (q, root=document) => Array.from(root.querySelectorAll(q));
+
+    function toast(msg){
+      const box = $('#toast');
+      const el = document.createElement('div');
+      el.style.cssText = `
+        max-width: 520px;
+        border: 1px solid rgba(255,255,255,.14);
+        background: rgba(0,0,0,.36);
+        backdrop-filter: blur(10px);
+        border-radius: 14px;
+        padding: 10px 12px;
+        box-shadow: 0 14px 28px rgba(0,0,0,.35);
+        color: #eaf0ff;
+        font-size: 9.5pt;
+        line-height: 1.35;
+      `;
+      el.textContent = msg;
+      box.appendChild(el);
+      setTimeout(()=>{ el.style.opacity = '0'; el.style.transform='translateY(8px)'; el.style.transition='.2s ease'; }, 2600);
+      setTimeout(()=>{ el.remove(); }, 2900);
+    }
+
+    const scenarioIssues = {
+      config: [
+        {sev:'bad', h:'覆盖率不足：主表 code 在映射表中缺失', d:'缺口 37 个 OrgCode；建议生成缺口清单 Excel，业务补齐后回导。', tag:'P0·必须修复'},
+        {sev:'warn', h:'冲突映射：一对多/多对一', d:'发现 12 处冲突；需要明确裁决策略（保留哪个 StdOrgId）。', tag:'P0·需要裁决'},
+        {sev:'bad', h:'参照完整性失败', d:'映射表引用的字典 key 不存在（9 条）。', tag:'P0·必须修复'},
+      ],
+      biz: [
+        {sev:'warn', h:'单据字段类型可解析率不足', d:'金额/日期存在脏值；建议先做可解析率报告，再决定清洗规则。', tag:'P0'},
+        {sev:'warn', h:'主键重复/缺失', d:'按单号去重需指定“保留最新”字段（如更新时间/录入时间）。', tag:'P1'},
+        {sev:'ok', h:'TRIM/大小写/编码归一有效', d:'快速提升可统计性与 join 成功率。', tag:'P0'},
+      ],
+      join: [
+        {sev:'bad', h:'关联失败：业务表引用码未在配置表出现', d:'建议生成“引用不存在清单”，按维度分组给责任方修复。', tag:'P0'},
+        {sev:'warn', h:'同义导致 Join 失败', d:'需字典归一（同义词→标准值），规则要固化成模板。', tag:'P0'},
+        {sev:'warn', h:'多版本配置导致口径漂移', d:'建议按生效日期/版本号做记录级规则（P1）。', tag:'P1'},
+      ]
+    };
+
+    const scenarioRuleRows = {
+      config: [
+        ['关系级', '覆盖率检查：Main.OrgCode ⟂ OrgMap.OrgCode（缺口清单）', 'P0', true],
+        ['关系级', '冲突检查：OrgMap.OrgCode → StdOrgId（函数性依赖）', 'P0', true],
+        ['关系级', '参照完整性：OrgMap.StdOrgId ∈ OrgDict', 'P0', true],
+        ['字段级', '同义归一：Region（北京/北京市/京→北京市）', 'P0', true],
+        ['记录级', '按 OrgCode 去重保留最新（UpdatedAt DESC）', 'P1', true],
+      ],
+      biz: [
+        ['字段级', '金额/日期可解析率报告（无法解析的落清单）', 'P0', true],
+        ['字段级', '空值填充：custom / forward / backward（P1）', 'P1', false],
+        ['记录级', '按单号去重保留最新（LastModified DESC）', 'P1', true],
+        ['字段级', '文本标准化：TRIM/UPPER/正则替换', 'P0', true],
+      ],
+      join: [
+        ['关系级', '参照完整性：Biz.OrgCode ∈ OrgDict', 'P0', true],
+        ['关系级', '映射覆盖率：Biz.OrgCode 在 OrgMap 覆盖率', 'P0', true],
+        ['字段级', '同义归一：渠道/区域/门店名称（字典驱动）', 'P0', true],
+        ['记录级', '多版本配置按生效期选取（P1）', 'P1', true],
+      ]
+    };
+
+    function renderIssues(s){
+      const list = $('#issueList');
+      list.innerHTML = '';
+      (scenarioIssues[s] || []).forEach(x=>{
+        const el = document.createElement('div');
+        el.className = 'item';
+        el.innerHTML = `
+          <div class="sev ${x.sev}"></div>
+          <div>
+            <div class="h">${x.h}</div>
+            <div class="d">${x.d}</div>
+          </div>
+          <div class="tag">${x.tag}</div>
+        `;
+        list.appendChild(el);
+      });
+    }
+
+    function renderRuleTable(s){
+      const tb = $('#ruleTable');
+      tb.innerHTML = '';
+      (scenarioRuleRows[s] || []).forEach(r=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${r[0]}</td>
+          <td class="muted">${r[1]}</td>
+          <td class="mono">${r[2]}</td>
+          <td class="mono">${r[3] ? 'ON' : 'OFF'}</td>
+        `;
+        tb.appendChild(tr);
+      });
+    }
+
+    function renderRuleJson(s){
+      const base = {
+        schema: "xslq.ruleset.v1",
+        name: s === 'config' ? "基础配置与映射治理模板" : (s==='biz' ? "业务单据清洗模板" : "配置↔业务关联清理模板"),
+        version: "1.3.0",
+        priority: ["P0","P1"],
+        params: {
+          primaryKey: s==='biz' ? "DocNo" : "OrgCode",
+          keepStrategy: s==='biz' ? { type:"keep_latest", orderBy:"LastModified DESC" } : { type:"keep_latest", orderBy:"UpdatedAt DESC" },
+          mapping: s==='config' ? { mapTable:"OrgMap", src:"OrgCode", dst:"StdOrgId", dict:"OrgDict" } : null,
+          thresholds: { coverageMin: s==='config' ? 0.98 : 0.95 }
+        },
+        rules: (scenarioRuleRows[s]||[]).map(x=>({
+          level: x[0],
+          desc: x[1],
+          priority: x[2],
+          enabled: x[3]
+        })),
+        publish: {
+          exportToExcelDir: true,
+          packageDir: ".xslq_publish",
+          outputs: ["profiling_report.xlsx","cleansing_report.xlsx","diff_report.xlsx","ruleset.json"]
+        }
+      };
+      $('#ruleJson').value = JSON.stringify(base, null, 2);
+    }
+
+    function setScenario(s){
+      $$('#scenario .pill').forEach(p=>p.classList.toggle('active', p.dataset.s===s));
+      renderIssues(s);
+      renderRuleTable(s);
+      renderRuleJson(s);
+      toast(`已切换场景：${s==='config'?'基础配置/映射':s==='biz'?'业务单据记录':'配置↔业务关联'}`);
+    }
+
+    function setView(id){
+      $$('#nav .nav-item').forEach(it=>it.classList.toggle('active', it.dataset.view===id));
+      $$('.view').forEach(v=>v.classList.toggle('active', v.id===id));
+    }
+
+    // init
+    setScenario('config');
+    $$('#scenario .pill').forEach(p=>p.addEventListener('click', ()=>setScenario(p.dataset.s)));
+    $$('#nav .nav-item').forEach(it=>it.addEventListener('click', ()=>setView(it.dataset.view)));
+    $('#tplSel')?.addEventListener('change', (e)=>{
+      const v = e.target.value;
+      setScenario(v==='cfg'?'config':v==='biz'?'biz':'join');
+    });
+
+    document.addEventListener('keydown', (e)=>{
+      if (e.target && ['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName)) return;
+      const map = { '1':'v_profile', '2':'v_rules', '3':'v_run', '4':'v_mapping', '5':'v_publish' };
+      if (map[e.key]) setView(map[e.key]);
+      if (e.key.toLowerCase()==='c'){
+        const cur = $('#scenario .pill.active')?.dataset.s || 'config';
+        const nxt = cur==='config'?'biz':cur==='biz'?'join':'config';
+        setScenario(nxt);
+      }
+    });
+  </script>
+</body>
+</html>
+

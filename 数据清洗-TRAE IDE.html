@@ -1,0 +1,1961 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ExcelSQLite - 数据清理工具</title>
+    <style>
+        /* 基础样式 - 微软雅黑9号，符合Office UI规范 */
+        body {
+            font-family: "Microsoft YaHei", "微软雅黑", "Segoe UI", sans-serif;
+            font-size: 9pt;
+            font-weight: normal;
+            color: #333;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f0f0;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* 统一：字段/标签不加粗（标题类仍可单独设置） */
+        label, .form-label, input, select, textarea, .table th, .table td {
+            font-weight: normal !important;
+        }
+        
+        /* 主容器 */
+        .container {
+            width: 100%;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* 顶部导航栏 */
+        .navbar {
+            background-color: #0078d4;
+            color: white;
+            padding: 8px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .navbar-title {
+            font-size: 10pt;
+            font-weight: 500;
+            user-select: none;
+        }
+        
+        .navbar-buttons {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .btn {
+            background-color: rgba(255,255,255,0.2);
+            color: white;
+            border: 1px solid rgba(255,255,255,0.3);
+            padding: 4px 12px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 9pt;
+            font-family: "Microsoft YaHei","微软雅黑","Segoe UI",sans-serif;
+            font-weight: normal;
+            transition: all 0.2s;
+        }
+        
+        .btn:hover {
+            background-color: rgba(255,255,255,0.3);
+            border-color: rgba(255,255,255,0.4);
+        }
+
+        /* Ribbon 顶部右侧（用户模式等）按钮风格：更接近 Office */
+        .ribbon-top-btn {
+            background: rgba(255,255,255,0.14);
+            color: #ffffff;
+            border: 1px solid rgba(255,255,255,0.28);
+            padding: 4px 10px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 9pt;
+            font-family: "Microsoft YaHei","微软雅黑","Segoe UI",sans-serif;
+            font-weight: normal;
+        }
+        .ribbon-top-btn:hover {
+            background: rgba(255,255,255,0.22);
+            border-color: rgba(255,255,255,0.4);
+        }
+
+        /* 右侧“用户模式/文字布局”在浅色面板上使用深色按钮（避免看不见文字） */
+        .ribbon-panel-tools .ribbon-top-btn {
+            background: #ffffff;
+            color: #005a9e;
+            border: 1px solid #cfe6ff;
+        }
+        .ribbon-panel-tools .ribbon-top-btn:hover {
+            background: #f3f9ff;
+            border-color: #9fd0ff;
+        }
+
+        /* 顶部“用户模式”下拉菜单 */
+        .topmenu {
+            display: inline-flex;
+            position: relative;
+            align-items: center;
+        }
+        .topmenu-dropdown {
+            display: none;
+            position: absolute;
+            right: 0;
+            top: 28px;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+            z-index: 1000;
+            min-width: 170px;
+            color: #333;
+        }
+        .topmenu-item {
+            padding: 10px 12px;
+            cursor: pointer;
+            font-size: 9pt;
+            white-space: nowrap;
+        }
+        .topmenu-item:hover {
+            background: #f5f5f5;
+        }
+        
+        .btn-secondary {
+            background-color: #f0f0f0;
+            color: #333;
+            border: 1px solid #ccc;
+        }
+        
+        .btn-secondary:hover {
+            background-color: #e0e0e0;
+            border-color: #bdbdbd;
+        }
+        
+        .btn-success {
+            background-color: #005a9e;
+            border-color: #004a8a;
+        }
+        
+        .btn-success:hover {
+            background-color: #004a8a;
+        }
+        
+        /* Ribbon：Tab + Panel（Office 风格） */
+        .ribbon-container {
+            background-color: #0078d4;
+            border-bottom: 1px solid #0066b3;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .ribbon-tabs {
+            display: flex;
+            gap: 2px;
+            padding: 6px 12px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.35);
+            align-items: center;
+            background: #0078d4;
+        }
+
+        .ribbon-tab-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            border-bottom: none;
+            border-top-left-radius: 6px;
+            border-top-right-radius: 6px;
+            padding: 6px 14px;
+            font-size: 9pt;
+            font-family: "Microsoft YaHei","微软雅黑","Segoe UI",sans-serif;
+            color: #ffffff;
+            cursor: pointer;
+        }
+
+        .ribbon-tab-btn:hover {
+            background: rgba(255,255,255,0.12);
+            border-color: rgba(255,255,255,0.25);
+        }
+
+        .ribbon-tab-btn.active {
+            background: #ffffff;
+            border-color: rgba(255,255,255,0.6);
+            color: #005a9e;
+            font-weight: normal;
+        }
+
+        .ribbon-panels {
+            background: #f3f9ff;
+            display: flex;
+            align-items: stretch;
+        }
+
+        .ribbon-panel {
+            padding: 4px 12px;
+            display: none;
+            gap: 16px;
+            overflow-x: auto;
+            white-space: nowrap;
+            flex: 1 1 auto;
+        }
+
+        .ribbon-panel.active {
+            display: flex;
+        }
+        
+        .ribbon-panel::-webkit-scrollbar {
+            height: 6px;
+        }
+        
+        .ribbon-panel::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 3px;
+        }
+        
+        .ribbon-panel::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 3px;
+        }
+        
+        .ribbon-panel::-webkit-scrollbar-thumb:hover {
+            background: #a1a1a1;
+        }
+        
+        .ribbon-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            align-items: stretch;
+        }
+
+        /* 分组之间：明显竖线分隔（仿 Excel Ribbon） */
+        .ribbon-panel .ribbon-group:not(:last-child) {
+            padding-right: 14px;
+            margin-right: 14px;
+            border-right: 2px solid #b6d8ff;
+        }
+        
+        .ribbon-group-title {
+            font-family: "Microsoft YaHei","微软雅黑","Segoe UI",sans-serif;
+            font-size: 8pt;
+            color: #333;
+            text-transform: none;
+            font-weight: normal;
+            order: 2;
+            text-align: center;
+            padding-top: 3px;
+            border-top: 1px solid #d6eaff;
+        }
+        
+        .ribbon-buttons {
+            display: flex;
+            gap: 4px;
+            order: 1;
+        }
+        
+        .ribbon-btn {
+            font-family: "Microsoft YaHei","微软雅黑","Segoe UI",sans-serif;
+            background-color: transparent;
+            border: 1px solid transparent;
+            padding: 4px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 9pt;
+            font-weight: normal;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 2px;
+            transition: all 0.2s;
+            min-width: 56px;
+            min-height: 40px;
+            line-height: 1.2;
+        }
+        .ribbon-btn:hover {
+            background: #ffffff;
+            border-color: #cfe6ff;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+        }
+        .ribbon-btn:active {
+            transform: translateY(0);
+        }
+
+        /* Office 风格 SVG 图标（Fluent/Office 2019+风格，接近 2016/2026） */
+        .icon-svg {
+            width: 16px;
+            height: 16px;
+            display: block;
+            fill: currentColor;
+            flex: 0 0 auto;
+        }
+        .ribbon-btn .icon-svg {
+            margin-bottom: 2px;
+            padding: 2px;
+            border-radius: 6px;
+            background: #e6f2ff;
+            color: #0078d4;
+            border: 1px solid #cfe6ff;
+        }
+
+        /* 顶部/工具栏用“纯图标”（不要底色） */
+        .icon-svg-plain {
+            width: 14px;
+            height: 14px;
+            fill: currentColor;
+            padding: 0 !important;
+            margin: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            color: inherit;
+        }
+
+        /* 下载按钮（Excel 常见的“暖色强调”） */
+        .wizard-btn-download {
+            background: linear-gradient(180deg, #fff7e6 0%, #ffe7ba 100%);
+            border-color: #ffd591;
+            color: #8a4b00;
+        }
+        .wizard-btn-download:hover {
+            background: linear-gradient(180deg, #ffe7ba 0%, #ffd591 100%);
+        }
+
+        /* Ribbon 折叠（仿 Excel：只显示 Tab，点击 Tab 临时展开） */
+        .ribbon-container { position: relative; }
+        body.ribbon-collapsed .ribbon-panels { display: none; }
+        body.ribbon-collapsed.ribbon-temp-open .ribbon-panels {
+            display: flex;
+            position: absolute;
+            left: 0;
+            right: 0;
+            top: 100%;
+            z-index: 2000;
+            border-bottom: 1px solid #cfe6ff;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+        }
+
+        /* Ribbon 右侧工具（用户模式等） */
+        .ribbon-tabs-right {
+            margin-left: auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding-bottom: 6px;
+        }
+
+        .ribbon-slogan {
+            color: rgba(255,255,255,0.92);
+            font-size: 9pt;
+            padding: 4px 10px;
+            border-radius: 4px;
+            background: rgba(255,255,255,0.10);
+            border: 1px solid rgba(255,255,255,0.18);
+            user-select: none;
+            white-space: nowrap;
+        }
+
+        /* Ribbon 面板右侧：用户设置区（占用横向空间，不增加纵向高度） */
+        .ribbon-panel-tools {
+            flex: 0 0 auto;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 6px;
+            padding: 4px 8px;
+            border-left: 1px solid #cfe6ff;
+            white-space: nowrap;
+        }
+
+        .ribbon-panel-tools .tool-row {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            gap: 4px;
+        }
+
+        .ribbon-panel-tools .ribbon-top-btn.main {
+            width: 150px;
+            text-align: left;
+            padding: 4px 10px;
+        }
+        .ribbon-panel-tools .ribbon-top-btn.caret {
+            width: 32px;
+            padding: 4px 0;
+            text-align: center;
+        }
+
+        /* Ribbon 文字位置：默认居右（更省高度） */
+        body.ribbon-label-right .ribbon-btn,
+        body.ribbon-label-left .ribbon-btn {
+            flex-direction: row;
+            align-items: center;
+            justify-content: flex-start;
+            min-height: 32px;
+            min-width: 90px;
+            padding: 3px 8px;
+            gap: 10px;
+        }
+        body.ribbon-label-left .ribbon-btn {
+            flex-direction: row-reverse;
+        }
+        body.ribbon-label-right .ribbon-btn .icon-svg,
+        body.ribbon-label-left .ribbon-btn .icon-svg {
+            margin-bottom: 0;
+        }
+        body.ribbon-label-right .ribbon-btn span,
+        body.ribbon-label-left .ribbon-btn span {
+            white-space: nowrap;
+        }
+        body.ribbon-label-right .ribbon-btn br,
+        body.ribbon-label-left .ribbon-btn br {
+            display: none;
+        }
+        body.ribbon-label-top .ribbon-btn {
+            flex-direction: column-reverse;
+        }
+        body.ribbon-label-bottom .ribbon-btn {
+            flex-direction: column;
+        }
+        
+        .ribbon-btn:hover {
+            background-color: #e6f7ff;
+            border-color: #0078d4;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .ribbon-btn.active {
+            background-color: #0078d4;
+            color: white;
+            border-color: #0066b3;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        /* 文件信息栏 - 融入整体风格 */
+        .file-info-bar {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border-bottom: 1px solid #dee2e6;
+            padding: 3px 10px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            font-size: 8pt;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            min-height: 28px;
+            max-height: 30px;
+        }
+        
+        .file-info-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .file-info-label {
+            color: #495057;
+            font-weight: normal;
+            white-space: nowrap;
+        }
+        
+        .file-info-value {
+            color: #212529;
+            font-weight: normal;
+            background-color: #e9ecef;
+            padding: 2px 8px;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            min-width: 160px;
+            max-width: 260px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* 紧凑显示（用于“SQLite加载/默认操作数据/导入模式”等） */
+        .file-info-value.compact {
+            min-width: 160px;
+            max-width: 260px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .file-info-select.compact {
+            min-width: 160px;
+            max-width: 260px;
+            height: 22px;
+            padding: 0 6px;
+            font-size: 8pt;
+        }
+        
+        .file-info-value:empty::before,
+        .file-info-value[data-empty="true"]::before {
+            content: "未选择";
+            color: #6c757d;
+            font-style: italic;
+        }
+        
+        .file-info-select {
+            min-width: 280px;
+            font-size: 9pt;
+            padding: 4px 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            background-color: white;
+        }
+
+        /* 底部全局状态栏 */
+        .global-status-bar {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            height: 28px;
+            background: #f8f9fa;
+            border-top: 1px solid #dee2e6;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 0 12px;
+            font-size: 8.5pt;
+            color: #495057;
+            z-index: 999;
+        }
+
+        .global-status-bar .status-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .global-status-bar .status-text {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            max-width: 60vw;
+        }
+
+        /* 避免内容被底部状态栏遮挡 */
+        .main-content {
+            padding-bottom: 34px;
+        }
+        
+        .file-info-btn {
+            background: linear-gradient(180deg, #0078d4 0%, #005a9e 100%);
+            color: white;
+            border: 1px solid #005a9e;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 9pt;
+            margin-left: 6px;
+            transition: all 0.2s;
+        }
+        
+        .file-info-btn:hover {
+            background: linear-gradient(180deg, #0066b3 0%, #004a8a 100%);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.15);
+        }
+        
+        .file-info-icon {
+            color: #0078d4;
+            margin-right: 4px;
+        }
+        
+        /* 主内容区 */
+        .main-content {
+            flex: 1;
+            display: flex;
+            overflow: hidden;
+        }
+        
+        /* 左侧导航 */
+        .sidebar {
+            width: 200px;
+            background-color: #f8f9fa;
+            border-right: 1px solid #e1e4e8;
+            padding: 16px;
+            overflow-y: auto;
+            transition: all 0.3s;
+        }
+
+        /* 侧边栏可隐藏 */
+        body.sidebar-collapsed .sidebar {
+            display: none;
+        }
+        body.sidebar-collapsed .content {
+            padding-left: 24px;
+        }
+
+        .sidebar-toggle-btn {
+            width: 22px;
+            height: 22px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+            background: #ffffff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            margin-right: 6px;
+        }
+        .sidebar-toggle-btn .icon-svg {
+            width: 14px;
+            height: 14px;
+        }
+        .sidebar-toggle-btn:hover {
+            background: #e6f7ff;
+            border-color: #0078d4;
+        }
+        
+        .sidebar:hover {
+            box-shadow: 2px 0 8px rgba(0,0,0,0.05);
+        }
+        
+        .sidebar-section {
+            margin-bottom: 24px;
+        }
+        
+        .sidebar-section-title {
+            font-size: 8pt;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: normal;
+            margin-bottom: 8px;
+        }
+        
+        .sidebar-item {
+            padding: 6px 8px;
+            border-radius: 3px;
+            cursor: pointer;
+            margin-bottom: 2px;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .sidebar-item-content {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 2px;
+            flex: 1;
+        }
+        
+        .sidebar-item:hover {
+            background-color: #e6f7ff;
+            transform: translateX(2px);
+        }
+        
+        .sidebar-item.active {
+            background-color: #0078d4;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .sidebar-item-name {
+            font-size: 10pt;
+            font-weight: 500;
+        }
+        
+        .sidebar-item-time {
+            font-size: 8pt;
+            color: #666;
+        }
+        
+        .sidebar-item.active .sidebar-item-time {
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        .sidebar-item-count {
+            font-size: 8pt;
+            color: #666;
+            background-color: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 10px;
+            min-width: 20px;
+            text-align: center;
+            margin-left: auto;
+        }
+        
+        .sidebar-item.active .sidebar-item-count {
+            background-color: rgba(255, 255, 255, 0.3);
+            color: white;
+        }
+        
+        /* 右侧内容 */
+        .content {
+            flex: 1;
+            padding: 24px;
+            overflow-y: auto;
+            background-color: white;
+        }
+        
+        /* 卡片样式 */
+        .card {
+            background-color: white;
+            border: 1px solid #e1e4e8;
+            border-radius: 4px;
+            padding: 16px;
+            margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+        }
+        
+        .card:hover {
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            transform: translateY(-2px);
+        }
+        
+        .card-title {
+            font-size: 10pt;
+            font-weight: normal;
+            margin-bottom: 12px;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        /* 表单元素 */
+        .form-group {
+            margin-bottom: 12px;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 4px;
+            font-weight: normal;
+            color: #333;
+        }
+        
+        .form-control {
+            width: 100%;
+            padding: 6px 8px;
+            border: 1px solid #d1d5da;
+            border-radius: 3px;
+            font-size: 9pt;
+            font-family: "Microsoft YaHei", "微软雅黑", "Segoe UI", sans-serif;
+            box-sizing: border-box;
+            transition: all 0.2s;
+        }
+        
+        .form-control:focus {
+            outline: none;
+            border-color: #0078d4;
+            box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.2);
+            transform: scale(1.01);
+        }
+        
+        /* 表格样式 */
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .table th,
+        .table td {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #e1e4e8;
+        }
+        
+        .table th {
+            background-color: #f8f9fa;
+            font-weight: normal;
+            font-size: 8pt;
+            color: #666;
+            text-transform: uppercase;
+        }
+
+        /* 深色表头（用于“查询结果”等关键表格，避免看不出有表格） */
+        .table-head-dark th {
+            background-color: #003a8c;
+            color: #ffffff;
+            text-transform: none;
+        }
+
+        /* 搜索页：顶部固定工具栏（参考查询/统计的工具栏风格） */
+        .search-toolbar {
+            position: sticky;
+            top: 0;
+            z-index: 50;
+            background: #ffffff;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 10px 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+            margin-bottom: 12px;
+        }
+        .search-toolbar .row {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .search-toolbar .row + .row { margin-top: 8px; }
+        .search-toolbar .label {
+            font-size: 9pt;
+            color: #495057;
+            min-width: 70px;
+        }
+        .search-toolbar .hint {
+            font-size: 8pt;
+            color: #6c757d;
+        }
+        
+        .table tr:hover {
+            background-color: #f8f9fa;
+        }
+        
+        /* 卡片网格 */
+        .card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .stat-card {
+            background-color: white;
+            border: 1px solid #e1e4e8;
+            border-radius: 4px;
+            padding: 16px;
+            text-align: center;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: all 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+        }
+        
+        .stat-value {
+            font-size: 18pt;
+            font-weight: normal;
+            color: #0078d4;
+            margin-bottom: 8px;
+        }
+        
+        .stat-label {
+            font-size: 9pt;
+            color: #666;
+        }
+        
+        /* 向导式界面样式 */
+        .wizard-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+        
+        /* 步骤导航 */
+        .step-navigation {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+            position: relative;
+        }
+        
+        .step-navigation::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: #e1e4e8;
+            z-index: 1;
+        }
+        
+        .step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 2;
+            flex: 1;
+        }
+        
+        .step-circle {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            border: 2px solid #e1e4e8;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: normal;
+            font-size: 10pt;
+            color: #666;
+            transition: all 0.3s ease;
+        }
+        
+        .step.active .step-circle {
+            background-color: #0078d4;
+            border-color: #0078d4;
+            color: white;
+        }
+        
+        .step.completed .step-circle {
+            background-color: #107c10;
+            border-color: #107c10;
+            color: white;
+        }
+        
+        .step-label {
+            margin-top: 8px;
+            font-size: 8pt;
+            color: #666;
+            text-align: center;
+        }
+        
+        .step.active .step-label,
+        .step.completed .step-label {
+            color: #333;
+            font-weight: normal;
+        }
+        
+        /* 步骤内容 */
+        .step-content {
+            display: none;
+        }
+        
+        .step-content.active {
+            display: block;
+        }
+        
+        /* 向导按钮组 */
+        /* 向导按钮区域 - 参考DataTransposeAddIn风格 - 按钮位置恒定 */
+        .wizard-buttons {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-top: 24px;
+            padding: 16px;
+            background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            flex-wrap: wrap;
+        }
+
+        /* 向导主操作：置底固定工具栏（仿 Excel：主操作恒定、减少鼠标移位） */
+        .wizard-bottom-bar {
+            position: sticky;
+            bottom: -12px;
+            z-index: 60;
+            margin-top: 16px;
+        }
+
+        /* 底部工具栏：按钮组（复用 wizard-buttons 的视觉，但固定在底部） */
+        .wizard-buttons.wizard-bottom {
+            margin-top: 0;
+            padding: 6px 8px;
+        }
+
+        .wizard-buttons.wizard-bottom .wizard-btn {
+            padding: 3px 10px;
+        }
+
+        /* 单表查询：步骤条使用默认尺寸（按原来 1-2-3 圆圈风格的观感） */
+
+        /* 禁用态（更接近 Office） */
+        .wizard-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            filter: grayscale(20%);
+        }
+
+        /* 单表查询：使用原来的 1-2-3 圆圈步骤条风格 */
+        #single-table-query .step-navigation {
+            display: flex;
+        }
+        
+        /* 隐藏按钮但保留位置 */
+        .wizard-btn.hidden {
+            visibility: hidden;
+            pointer-events: none;
+        }
+        
+        /* 向导按钮样式 */
+        .wizard-btn {
+            padding: 4px 12px;
+            border: 1px solid #adb5bd;
+            border-radius: 4px;
+            font-size: 9pt;
+            font-family: "Microsoft YaHei", "微软雅黑", sans-serif;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+        
+        /* 帮助指引按钮 */
+        .wizard-btn-help {
+            background: linear-gradient(180deg, #e9ecef 0%, #dee2e6 100%);
+            color: #495057;
+        }
+        .wizard-btn-help:hover {
+            background: linear-gradient(180deg, #dee2e6 0%, #ced4da 100%);
+        }
+        
+        /* 保存设置按钮 */
+        .wizard-btn-save {
+            background: linear-gradient(180deg, #fff3cd 0%, #ffeaa7 100%);
+            color: #856404;
+            border-color: #ffc107;
+        }
+        .wizard-btn-save:hover {
+            background: linear-gradient(180deg, #ffeaa7 0%, #fdcb6e 100%);
+        }
+        
+        /* 上一步按钮 */
+        .wizard-btn-prev {
+            background: linear-gradient(180deg, #e9ecef 0%, #dee2e6 100%);
+            color: #495057;
+        }
+        .wizard-btn-prev:hover {
+            background: linear-gradient(180deg, #dee2e6 0%, #ced4da 100%);
+        }
+        
+        /* 下一步按钮 */
+        .wizard-btn-next {
+            background: linear-gradient(180deg, #0078d4 0%, #005a9e 100%);
+            color: white;
+            border-color: #005a9e;
+        }
+        .wizard-btn-next:hover {
+            background: linear-gradient(180deg, #0066b3 0%, #004a8a 100%);
+        }
+        
+        /* 执行操作按钮 */
+        .wizard-btn-execute {
+            background: linear-gradient(180deg, #0078d4 0%, #005a9e 100%);
+            color: white;
+            border-color: #005a9e;
+        }
+        .wizard-btn-execute:hover {
+            background: linear-gradient(180deg, #0066b3 0%, #004a8a 100%);
+        }
+        
+        /* 复制SQL按钮 */
+        .wizard-btn-copy {
+            background: linear-gradient(180deg, #17a2b8 0%, #117a8b 100%);
+            color: white;
+            border-color: #117a8b;
+        }
+        .wizard-btn-copy:hover {
+            background: linear-gradient(180deg, #138496 0%, #0e5f6b 100%);
+        }
+        
+        /* 退出按钮 */
+        .wizard-btn-exit {
+            background: linear-gradient(180deg, #dc3545 0%, #bd2130 100%);
+            color: white;
+            border-color: #bd2130;
+        }
+        .wizard-btn-exit:hover {
+            background: linear-gradient(180deg, #c82333 0%, #a71d2a 100%);
+        }
+        
+        /* 结果信息样式 */
+        .result-info {
+            background-color: #f8f9fa;
+            padding: 12px;
+            border-radius: 4px;
+            margin-bottom: 16px;
+            line-height: 1.8;
+        }
+        
+        .result-info strong {
+            color: #0078d4;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 150px;
+            }
+            
+            .ribbon {
+                flex-wrap: wrap;
+            }
+            
+            .card-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .step-label {
+                display: none;
+            }
+        }
+        
+        /* 数据清理专用样式 */
+        .cleaning-module {
+            border: 1px solid #e1e4e8;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            overflow: hidden;
+        }
+        
+        .cleaning-module-header {
+            background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
+            padding: 12px 16px;
+            border-bottom: 1px solid #dee2e6;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .cleaning-module-title {
+            font-size: 10pt;
+            font-weight: 500;
+            color: #333;
+        }
+        
+        .cleaning-module-content {
+            padding: 16px;
+        }
+        
+        .rule-item {
+            background: #f8f9fa;
+            border: 1px solid #e1e4e8;
+            border-radius: 4px;
+            padding: 12px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .rule-item:hover {
+            background: #e6f7ff;
+            border-color: #0078d4;
+        }
+        
+        .rule-name {
+            font-size: 9pt;
+            font-weight: 500;
+        }
+        
+        .rule-actions {
+            display: flex;
+            gap: 8px;
+        }
+        
+        .template-card {
+            background: #f8f9fa;
+            border: 1px solid #e1e4e8;
+            border-radius: 4px;
+            padding: 16px;
+            transition: all 0.3s;
+        }
+        
+        .template-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+            border-color: #0078d4;
+        }
+        
+        .template-title {
+            font-size: 10pt;
+            font-weight: 500;
+            margin-bottom: 8px;
+            color: #333;
+        }
+        
+        .template-description {
+            font-size: 8pt;
+            color: #666;
+            margin-bottom: 12px;
+        }
+        
+        .template-actions {
+            display: flex;
+            gap: 8px;
+        }
+    </style>
+    <!-- SQL编辑器：轻量代码编辑器（CodeMirror 5，MIT 许可，本地静态资源） -->
+    <link rel="stylesheet" href="assets/codemirror/codemirror.css">
+    <link rel="stylesheet" href="assets/codemirror/dialog.css">
+    <style>
+        /* CodeMirror 容器自适应 */
+        .CodeMirror { height: 100% !important; font-family: "Consolas","Monaco",monospace; font-size: 10pt; line-height: 1.6; }
+        .CodeMirror-scroll { overscroll-behavior: contain; }
+    </style>
+</head>
+<body>
+    <!-- Fluent/Office 风格图标（内联 symbol sprite，避免外部依赖） -->
+    <svg xmlns="http://www.w3.org/2000/svg" style="position:absolute;width:0;height:0;overflow:hidden">
+<symbol id="ico-hamburger" viewBox="0 0 24 24"><path d="M2.75254 17.9997H21.2525C21.6668 17.9997 22.0025 18.3355 22.0025 18.7497C22.0025 19.1294 21.7204 19.4432 21.3543 19.4928L21.2525 19.4997H2.75254C2.33832 19.4997 2.00254 19.1639 2.00254 18.7497C2.00254 18.37 2.28469 18.0562 2.65077 18.0065L2.75254 17.9997H21.2525H2.75254ZM2.75254 11.5027H21.2525C21.6668 11.5027 22.0025 11.8385 22.0025 12.2527C22.0025 12.6324 21.7204 12.9462 21.3543 12.9959L21.2525 13.0027H2.75254C2.33832 13.0027 2.00254 12.6669 2.00254 12.2527C2.00254 11.873 2.28469 11.5592 2.65077 11.5095L2.75254 11.5027H21.2525H2.75254ZM2.75168 5.00293H21.2517C21.6659 5.00293 22.0017 5.33872 22.0017 5.75293C22.0017 6.13263 21.7195 6.44642 21.3535 6.49608L21.2517 6.50293H2.75168C2.33746 6.50293 2.00168 6.16714 2.00168 5.75293C2.00168 5.37323 2.28383 5.05944 2.64991 5.00978L2.75168 5.00293H21.2517H2.75168Z"/></symbol>
+<symbol id="ico-folder-open" viewBox="0 0 24 24"><path d="M3.50014 6.25C3.50014 5.2835 4.28364 4.5 5.25014 4.5H8.12882C8.32773 4.5 8.5185 4.57902 8.65915 4.71967L10.7198 6.78033C10.8605 6.92098 11.0512 7 11.2501 7H16.7501C17.7166 7 18.5001 7.7835 18.5001 8.75C18.5001 8.83602 18.5146 8.91866 18.5413 8.99561L8.71867 8.99561C7.37893 8.99561 6.14095 9.71035 5.47108 10.8706L3.50014 14.2844V6.25ZM2.00036 17.7883C2.02089 19.5656 3.468 21 5.25014 21H11.0001C11.0292 21 11.058 20.9983 11.0862 20.9951H16.2812C17.6209 20.9951 18.8589 20.2804 19.5288 19.1201L22.5596 13.8706C23.7748 11.7657 22.3337 9.14964 19.9567 9.00214C19.9848 8.92334 20.0001 8.83846 20.0001 8.75C20.0001 6.95507 18.5451 5.5 16.7501 5.5H11.5608L9.71981 3.65901C9.29786 3.23705 8.72556 3 8.12882 3H5.25014C3.45522 3 2.00014 4.45507 2.00014 6.25V17.71C1.9999 17.7362 1.99997 17.7623 2.00036 17.7883ZM8.71867 10.4956L19.745 10.4956C21.0921 10.4956 21.9341 11.9539 21.2605 13.1206L18.2297 18.3701C17.8278 19.0663 17.085 19.4951 16.2812 19.4951H5.25485C3.9077 19.4951 3.06573 18.0368 3.7393 16.8701L6.77011 11.6206C7.17204 10.9245 7.91482 10.4956 8.71867 10.4956Z"/></symbol>
+<symbol id="ico-document-search" viewBox="0 0 24 24"><path d="M4 4C4 2.89543 4.89543 2 6 2H12.1722C12.7027 2 13.2114 2.21071 13.5864 2.58579L19.4142 8.41355C19.7893 8.78863 20 9.29733 20 9.82777V20C20 21.1046 19.1046 22 18 22H13.9822C13.9303 21.6387 13.7654 21.2905 13.4874 21.0126L12.9749 20.5H18C18.2761 20.5 18.5 20.2761 18.5 20V10H14C12.8954 10 12 9.10457 12 8V3.5H6C5.72386 3.5 5.5 3.72386 5.5 4V11.0907C4.96945 11.1881 4.46553 11.3617 4 11.5997V4ZM14 8.5H17.3793L13.5 4.62066V8C13.5 8.27614 13.7239 8.5 14 8.5ZM6.5 21C7.47187 21 8.37179 20.6919 9.1074 20.1681L11.7197 22.7803C12.0126 23.0732 12.4874 23.0732 12.7803 22.7803C13.0732 22.4874 13.0732 22.0126 12.7803 21.7197L10.1681 19.1074C10.6919 18.3718 11 17.4719 11 16.5C11 14.0147 8.98528 12 6.5 12C4.01472 12 2 14.0147 2 16.5C2 18.9853 4.01472 21 6.5 21ZM6.5 19.5C4.84315 19.5 3.5 18.1569 3.5 16.5C3.5 14.8431 4.84315 13.5 6.5 13.5C8.15685 13.5 9.5 14.8431 9.5 16.5C9.5 18.1569 8.15685 19.5 6.5 19.5Z"/></symbol>
+<symbol id="ico-document-page" viewBox="0 0 24 24"><path d="M17.744 1.99609C18.9349 1.99609 19.9097 2.92126 19.9888 4.09205L19.994 4.24609V19.7442C19.994 20.935 19.0689 21.9098 17.8981 21.989L17.744 21.9942H6.24414C5.05328 21.9942 4.0785 21.069 3.99933 19.8982L3.99414 19.7442V4.24609C3.99414 3.05523 4.9193 2.08045 6.09009 2.00128L6.24414 1.99609H17.744ZM17.744 3.49609H6.24414C5.86444 3.49609 5.55065 3.77825 5.50099 4.14432L5.49414 4.24609V19.7442C5.49414 20.1239 5.77629 20.4377 6.14237 20.4873L6.24414 20.4942H17.744C18.1237 20.4942 18.4375 20.212 18.4872 19.8459L18.494 19.7442V4.24609C18.494 3.8664 18.2119 3.5526 17.8458 3.50294L17.744 3.49609ZM13.0182 16.0192C12.6091 15.9544 12.3299 15.5702 12.3947 15.1611L12.4993 14.5003H11.018L10.8762 15.3957C10.8115 15.8048 10.4273 16.0839 10.0182 16.0192C9.60906 15.9544 9.32992 15.5702 9.3947 15.1611L9.49933 14.5003H8.74933C8.33512 14.5003 7.99933 14.1645 7.99933 13.7503C7.99933 13.3361 8.33512 13.0003 8.74933 13.0003H9.73684L9.97434 11.5003H9.24933C8.83512 11.5003 8.49933 11.1645 8.49933 10.7503C8.49933 10.3361 8.83512 10.0003 9.24933 10.0003H10.2118L10.4112 8.74108C10.476 8.33196 10.8602 8.05282 11.2693 8.1176C11.6784 8.18238 11.9575 8.56654 11.8928 8.97566L11.7305 10.0003H13.2118L13.4112 8.74108C13.476 8.33196 13.8602 8.05282 14.2693 8.1176C14.6784 8.18238 14.9575 8.56655 14.8928 8.97566L14.7305 10.0003H15.2493C15.6635 10.0003 15.9993 10.3361 15.9993 10.7503C15.9993 11.1645 15.6635 11.5003 15.2493 11.5003H14.493L14.2555 13.0003H14.7493C15.1635 13.0003 15.4993 13.3361 15.4993 13.7503C15.4993 14.1645 15.1635 14.5003 14.7493 14.5003H14.018L13.8762 15.3957C13.8115 15.8048 13.4273 16.0839 13.0182 16.0192ZM11.493 11.5003L11.2555 13.0003H12.7368L12.9743 11.5003H11.493Z"/></symbol>
+<symbol id="ico-scan" viewBox="0 0 24 24"><path d="M12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2ZM15.2502 14.3322L15.2115 14.4042L15.1479 14.4954L10.3911 20.3479C10.9121 20.4478 11.4499 20.5 12 20.5C14.171 20.5 16.1518 19.6861 17.6541 18.3468L15.57 13.8062C15.4767 13.9901 15.3696 14.1659 15.2502 14.3322ZM4.4903 15.9854C5.42691 17.7466 6.96494 19.1392 8.83046 19.8894L11.991 16L11.8004 15.9951L11.669 15.9865L4.4903 15.9854ZM20.1301 9.51192H15.1322C15.2138 9.61455 15.2905 9.72128 15.3619 9.83176C15.3864 9.85886 15.4088 9.8889 15.4291 9.92091L15.4778 10.0105L15.5168 10.0926C15.6029 10.251 15.6786 10.4158 15.743 10.5862L18.7588 17.1552C19.8511 15.7253 20.5 13.9384 20.5 12C20.5 11.1343 20.3706 10.2989 20.1301 9.51192ZM3.5 12C3.5 12.8649 3.62919 13.6997 3.86932 14.486H8.86618C8.7844 14.3831 8.70759 14.276 8.6361 14.1652L8.50085 13.9432L4.88651 7.34546C4.00985 8.68254 3.5 10.2817 3.5 12ZM10.0198 10.4737L9.9755 10.5454C9.95359 10.5796 9.92937 10.6114 9.90318 10.6407C9.64761 11.0317 9.5 11.4986 9.5 12C9.5 13.2943 10.4835 14.3588 11.744 14.487H12.256C13.5165 14.3588 14.5 13.2943 14.5 12C14.5 10.6985 13.5055 9.62934 12.235 9.5109L11.8623 9.51285L11.8043 9.50755C11.0785 9.56375 10.4396 9.92987 10.0198 10.4737ZM12 3.5C9.60862 3.5 7.4479 4.48753 5.90339 6.07704L8.30536 10.4644C8.43215 10.1597 8.59554 9.87405 8.79004 9.61292L12.6939 3.52791C12.465 3.50942 12.2336 3.5 12 3.5ZM11.5942 8.02033C11.7277 8.00689 11.863 8 12 8C12.1026 8 12.2038 8.00689 12.3373 8.02033L16.5 8.5V12C16.5 12.2761 16.2761 12.5 16 12.5C15.7239 12.5 15.5 12.2761 15.5 12V9.23105L12.3373 8.97967C12.2038 8.96623 12.1026 8.96 12 8.96C11.8974 8.96 11.7962 8.96623 11.6627 8.97967L8.5 9.23105V12C8.5 12.2761 8.27614 12.5 8 12.5C7.72386 12.5 7.5 12.2761 7.5 12V8.5L11.5942 8.02033Z"/></symbol>
+<symbol id="ico-database" viewBox="0 0 24 24"><path d="M19 3H5C3.89543 3 3 3.89543 3 5V19C3 20.1046 3.89543 21 5 21H19C20.1046 21 21 20.1046 21 19V5C21 3.89543 20.1046 3 19 3ZM19 5V7H5V5H19ZM19 9V11H5V9H19ZM19 13V15H5V13H19ZM19 17V19H5V17H19Z"/></symbol>
+<symbol id="ico-clean" viewBox="0 0 24 24"><path d="M19 3H5C3.89543 3 3 3.89543 3 5V19C3 20.1046 3.89543 21 5 21H19C20.1046 21 21 20.1046 21 19V5C21 3.89543 20.1046 3 19 3ZM16.5 11.5C16.7761 11.5 17 11.2761 17 11C17 10.7239 16.7761 10.5 16.5 10.5H13V6H10V10.5H6.5C6.22386 10.5 6 10.7239 6 11C6 11.2761 6.22386 11.5 6.5 11.5H10V16H13V11.5H16.5Z"/></symbol>
+<symbol id="ico-template" viewBox="0 0 24 24"><path d="M14 2H6C4.89543 2 4 2.89543 4 4V20C4 21.1046 4.89543 22 6 22H18C19.1046 22 20 21.1046 20 20V8L14 2ZM18 20H6V4H13V9H18V20Z"/></symbol>
+<symbol id="ico-rule" viewBox="0 0 24 24"><path d="M12 2C6.47715 2 2 6.47715 2 12C2 17.5228 6.47715 22 12 22C17.5228 22 22 17.5228 22 12C22 6.47715 17.5228 2 12 2ZM12 4C16.4183 4 20 7.58172 20 12C20 16.4183 16.4183 20 12 20C7.58172 20 4 16.4183 4 12C4 7.58172 7.58172 4 12 4ZM11 7H13V17H11V7ZM11 19H13V21H11V19Z"/></symbol>
+<symbol id="ico-export" viewBox="0 0 24 24"><path d="M19 3H5C3.89543 3 3 3.89543 3 5V19C3 20.1046 3.89543 21 5 21H19C20.1046 21 21 20.1046 21 19V5C21 3.89543 20.1046 3 19 3ZM17 17H7V15H17V17ZM17 13H7V11H17V13ZM17 9H7V7H17V9Z"/></symbol>
+<symbol id="ico-import" viewBox="0 0 24 24"><path d="M19 3H5C3.89543 3 3 3.89543 3 5V19C3 20.1046 3.89543 21 5 21H19C20.1046 21 21 20.1046 21 19V5C21 3.89543 20.1046 3 19 3ZM17 17H7V15H17V17ZM17 13H7V11H17V13ZM17 9H7V7H17V9Z"/></symbol>
+<symbol id="ico-save" viewBox="0 0 24 24"><path d="M19 12V19H5V5H12V12H19Z"/></symbol>
+<symbol id="ico-load" viewBox="0 0 24 24"><path d="M19 3H5C3.89543 3 3 3.89543 3 5V19C3 20.1046 3.89543 21 5 21H19C20.1046 21 21 20.1046 21 19V5C21 3.89543 20.1046 3 19 3ZM12 17C13.6569 17 15 15.6569 15 14C15 12.3431 13.6569 11 12 11C10.3431 11 9 12.3431 9 14C9 15.6569 10.3431 17 12 17Z"/></symbol>
+<symbol id="ico-run" viewBox="0 0 24 24"><path d="M13.5 5.5C14.8807 5.5 16 6.61929 16 8V16C16 17.3807 14.8807 18.5 13.5 18.5H6.5C5.11929 18.5 4 17.3807 4 16V8C4 6.61929 5.11929 5.5 6.5 5.5H13.5ZM13.5 7H6.5C5.94772 7 5.5 7.44772 5.5 8V16C5.5 16.5523 5.94772 17 6.5 17H13.5C14.0523 17 14.5 16.5523 14.5 16V8C14.5 7.44772 14.0523 7 13.5 7Z"/></symbol>
+<symbol id="ico-config" viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 0 1 8.5 12A3.5 3.5 0 0 1 12 8.5A3.5 3.5 0 0 1 15.5 12A3.5 3.5 0 0 1 12 15.5M19.43 12.97C19.47 12.65 19.5 12.33 19.5 12C19.5 11.67 19.47 11.34 19.43 11L21.54 9.37C21.73 9.22 21.78 8.95 21.66 8.73L19.66 5.27C19.54 5.05 19.27 4.96 19.05 5.05L16.56 6.05C16.04 5.66 15.5 5.32 14.87 5.07L14.5 2.42C14.46 2.18 14.25 2 14 2H10C9.75 2 9.54 2.18 9.5 2.42L9.13 5.07C8.5 5.32 7.96 5.66 7.44 6.05L4.95 5.05C4.73 4.96 4.46 5.05 4.34 5.27L2.34 8.73C2.21 8.95 2.27 9.22 2.46 9.37L4.57 11C4.53 11.34 4.5 11.67 4.5 12C4.5 12.33 4.53 12.65 4.57 12.97L2.46 14.63C2.27 14.78 2.21 15.05 2.34 15.27L4.34 18.73C4.46 18.95 4.73 19.03 4.95 18.95L7.44 17.94C7.96 18.34 8.5 18.68 9.13 18.93L9.5 21.58C9.54 21.82 9.75 22 10 22H14C14.25 22 14.46 21.82 14.5 21.58L14.87 18.93C15.5 18.67 16.04 18.34 16.56 17.94L19.05 18.95C19.27 19.04 19.54 18.95 19.66 18.73L21.66 15.27C21.78 15.05 21.73 14.78 21.54 14.63L19.43 12.97Z"/></symbol>
+</svg>
+
+    <!-- 主容器 -->
+    <div class="container">
+        <!-- 顶部导航栏 -->
+        <div class="navbar">
+            <div class="navbar-title">
+                <span>ExcelSQLite - 数据清理工具</span>
+            </div>
+            <div class="navbar-buttons">
+                <button class="btn" onclick="showHelp()">帮助</button>
+                <button class="btn" onclick="showAbout()">关于</button>
+            </div>
+        </div>
+
+        <!-- Ribbon 功能区 -->
+        <div class="ribbon-container">
+            <div class="ribbon-tabs">
+                <button class="ribbon-tab-btn active" data-panel="home">首页</button>
+                <button class="ribbon-tab-btn" data-panel="data-cleaning">数据清理</button>
+                <button class="ribbon-tab-btn" data-panel="templates">模板管理</button>
+                <button class="ribbon-tab-btn" data-panel="analysis">数据分析</button>
+                <button class="ribbon-tab-btn" data-panel="settings">设置</button>
+                <div class="ribbon-tabs-right">
+                    <div class="ribbon-slogan">P0/P1 级数据清理工具</div>
+                </div>
+            </div>
+
+            <!-- Ribbon 面板 -->
+            <div class="ribbon-panels">
+                <!-- 首页面板 -->
+                <div class="ribbon-panel active" id="home">
+                    <div class="ribbon-group">
+                        <div class="ribbon-buttons">
+                            <button class="ribbon-btn" onclick="loadExcel()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-folder-open"></use></svg>
+                                <span>加载Excel</span>
+                            </button>
+                            <button class="ribbon-btn" onclick="loadTemplate()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-template"></use></svg>
+                                <span>加载模板</span>
+                            </button>
+                        </div>
+                        <div class="ribbon-group-title">文件操作</div>
+                    </div>
+                    <div class="ribbon-group">
+                        <div class="ribbon-buttons">
+                            <button class="ribbon-btn" onclick="runCleaning()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-run"></use></svg>
+                                <span>执行清理</span>
+                            </button>
+                            <button class="ribbon-btn" onclick="exportResults()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-export"></use></svg>
+                                <span>导出结果</span>
+                            </button>
+                        </div>
+                        <div class="ribbon-group-title">操作</div>
+                    </div>
+                </div>
+
+                <!-- 数据清理面板 -->
+                <div class="ribbon-panel" id="data-cleaning">
+                    <div class="ribbon-group">
+                        <div class="ribbon-buttons">
+                            <button class="ribbon-btn" onclick="cleanBasicConfig()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-config"></use></svg>
+                                <span>基础配置清理</span>
+                            </button>
+                            <button class="ribbon-btn" onclick="cleanBusinessData()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-document-page"></use></svg>
+                                <span>业务数据清理</span>
+                            </button>
+                        </div>
+                        <div class="ribbon-group-title">清理类型</div>
+                    </div>
+                    <div class="ribbon-group">
+                        <div class="ribbon-buttons">
+                            <button class="ribbon-btn" onclick="manageRules()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-rule"></use></svg>
+                                <span>规则管理</span>
+                            </button>
+                            <button class="ribbon-btn" onclick="batchCleaning()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-database"></use></svg>
+                                <span>批量清理</span>
+                            </button>
+                        </div>
+                        <div class="ribbon-group-title">高级操作</div>
+                    </div>
+                </div>
+
+                <!-- 模板管理面板 -->
+                <div class="ribbon-panel" id="templates">
+                    <div class="ribbon-group">
+                        <div class="ribbon-buttons">
+                            <button class="ribbon-btn" onclick="createTemplate()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-template"></use></svg>
+                                <span>创建模板</span>
+                            </button>
+                            <button class="ribbon-btn" onclick="editTemplate()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-document-page"></use></svg>
+                                <span>编辑模板</span>
+                            </button>
+                        </div>
+                        <div class="ribbon-group-title">模板操作</div>
+                    </div>
+                    <div class="ribbon-group">
+                        <div class="ribbon-buttons">
+                            <button class="ribbon-btn" onclick="importTemplate()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-import"></use></svg>
+                                <span>导入模板</span>
+                            </button>
+                            <button class="ribbon-btn" onclick="exportTemplate()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-export"></use></svg>
+                                <span>导出模板</span>
+                            </button>
+                        </div>
+                        <div class="ribbon-group-title">模板共享</div>
+                    </div>
+                </div>
+
+                <!-- 数据分析面板 -->
+                <div class="ribbon-panel" id="analysis">
+                    <div class="ribbon-group">
+                        <div class="ribbon-buttons">
+                            <button class="ribbon-btn" onclick="analyzeFile()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-scan"></use></svg>
+                                <span>文件分析</span>
+                            </button>
+                            <button class="ribbon-btn" onclick="analyzeWorksheet()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-document-search"></use></svg>
+                                <span>工作表分析</span>
+                            </button>
+                        </div>
+                        <div class="ribbon-group-title">分析类型</div>
+                    </div>
+                    <div class="ribbon-group">
+                        <div class="ribbon-buttons">
+                            <button class="ribbon-btn" onclick="generateReport()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-export"></use></svg>
+                                <span>生成报告</span>
+                            </button>
+                            <button class="ribbon-btn" onclick="visualizeData()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-database"></use></svg>
+                                <span>数据可视化</span>
+                            </button>
+                        </div>
+                        <div class="ribbon-group-title">分析工具</div>
+                    </div>
+                </div>
+
+                <!-- 设置面板 -->
+                <div class="ribbon-panel" id="settings">
+                    <div class="ribbon-group">
+                        <div class="ribbon-buttons">
+                            <button class="ribbon-btn" onclick="generalSettings()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-config"></use></svg>
+                                <span>通用设置</span>
+                            </button>
+                            <button class="ribbon-btn" onclick="advancedSettings()">
+                                <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-database"></use></svg>
+                                <span>高级设置</span>
+                            </button>
+                        </div>
+                        <div class="ribbon-group-title">设置类型</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 文件信息栏 -->
+        <div class="file-info-bar">
+            <div class="file-info-item">
+                <span class="file-info-label">当前文件:</span>
+                <span class="file-info-value" id="current-file">未选择</span>
+                <button class="file-info-btn" onclick="loadExcel()">浏览</button>
+            </div>
+            <div class="file-info-item">
+                <span class="file-info-label">工作表:</span>
+                <select class="file-info-select compact" id="worksheet-select">
+                    <option value="">请选择工作表</option>
+                </select>
+            </div>
+            <div class="file-info-item">
+                <span class="file-info-label">模板:</span>
+                <select class="file-info-select compact" id="template-select">
+                    <option value="">无</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- 主内容区 -->
+        <div class="main-content">
+            <!-- 左侧导航 -->
+            <div class="sidebar">
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">快速操作</div>
+                    <div class="sidebar-item" onclick="loadExcel()">
+                        <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-folder-open"></use></svg>
+                        <div class="sidebar-item-content">
+                            <div class="sidebar-item-name">加载Excel文件</div>
+                        </div>
+                    </div>
+                    <div class="sidebar-item" onclick="runCleaning()">
+                        <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-run"></use></svg>
+                        <div class="sidebar-item-content">
+                            <div class="sidebar-item-name">执行清理</div>
+                        </div>
+                    </div>
+                    <div class="sidebar-item" onclick="exportResults()">
+                        <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-export"></use></svg>
+                        <div class="sidebar-item-content">
+                            <div class="sidebar-item-name">导出结果</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">清理模块</div>
+                    <div class="sidebar-item" onclick="cleanBasicConfig()">
+                        <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-config"></use></svg>
+                        <div class="sidebar-item-content">
+                            <div class="sidebar-item-name">基础配置清理</div>
+                            <div class="sidebar-item-time">最近使用</div>
+                        </div>
+                    </div>
+                    <div class="sidebar-item" onclick="cleanBusinessData()">
+                        <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-document-page"></use></svg>
+                        <div class="sidebar-item-content">
+                            <div class="sidebar-item-name">业务数据清理</div>
+                        </div>
+                    </div>
+                    <div class="sidebar-item" onclick="cleanRelationshipData()">
+                        <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-database"></use></svg>
+                        <div class="sidebar-item-content">
+                            <div class="sidebar-item-name">关联数据清理</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="sidebar-section">
+                    <div class="sidebar-section-title">模板</div>
+                    <div class="sidebar-item" onclick="createTemplate()">
+                        <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-template"></use></svg>
+                        <div class="sidebar-item-content">
+                            <div class="sidebar-item-name">创建模板</div>
+                        </div>
+                    </div>
+                    <div class="sidebar-item" onclick="manageTemplates()">
+                        <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-rule"></use></svg>
+                        <div class="sidebar-item-content">
+                            <div class="sidebar-item-name">管理模板</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧内容 -->
+            <div class="content">
+                <!-- 首页内容 -->
+                <div id="home-content" class="content-section active">
+                    <div class="card-grid">
+                        <div class="stat-card">
+                            <div class="stat-value">0</div>
+                            <div class="stat-label">已清理文件</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">0</div>
+                            <div class="stat-label">已应用规则</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">0</div>
+                            <div class="stat-label">已保存模板</div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-value">0</div>
+                            <div class="stat-label">处理记录</div>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-title">
+                            <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-template"></use></svg>
+                            <span>推荐模板</span>
+                        </div>
+                        <div class="card-grid">
+                            <div class="template-card">
+                                <div class="template-title">基础配置清理模板</div>
+                                <div class="template-description">用于清理基础配置及映射数据的标准化模板</div>
+                                <div class="template-actions">
+                                    <button class="btn btn-secondary" onclick="loadTemplate('basic-config')">使用</button>
+                                    <button class="btn btn-secondary" onclick="previewTemplate('basic-config')">预览</button>
+                                </div>
+                            </div>
+                            <div class="template-card">
+                                <div class="template-title">业务单据清理模板</div>
+                                <div class="template-description">用于清理业务单据记录数据的标准化模板</div>
+                                <div class="template-actions">
+                                    <button class="btn btn-secondary" onclick="loadTemplate('business-data')">使用</button>
+                                    <button class="btn btn-secondary" onclick="previewTemplate('business-data')">预览</button>
+                                </div>
+                            </div>
+                            <div class="template-card">
+                                <div class="template-title">关联数据清理模板</div>
+                                <div class="template-description">用于清理基础配置与业务记录关联数据的模板</div>
+                                <div class="template-actions">
+                                    <button class="btn btn-secondary" onclick="loadTemplate('relationship-data')">使用</button>
+                                    <button class="btn btn-secondary" onclick="previewTemplate('relationship-data')">预览</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 数据清理内容 -->
+                <div id="data-cleaning-content" class="content-section">
+                    <div class="cleaning-module">
+                        <div class="cleaning-module-header">
+                            <div class="cleaning-module-title">基础配置清理</div>
+                            <button class="btn btn-secondary" onclick="addCleaningRule('basic-config')">添加规则</button>
+                        </div>
+                        <div class="cleaning-module-content">
+                            <div class="rule-item">
+                                <div class="rule-name">移除空值</div>
+                                <div class="rule-actions">
+                                    <button class="btn btn-secondary" onclick="editRule(1)">编辑</button>
+                                    <button class="btn btn-secondary" onclick="deleteRule(1)">删除</button>
+                                </div>
+                            </div>
+                            <div class="rule-item">
+                                <div class="rule-name">标准化格式</div>
+                                <div class="rule-actions">
+                                    <button class="btn btn-secondary" onclick="editRule(2)">编辑</button>
+                                    <button class="btn btn-secondary" onclick="deleteRule(2)">删除</button>
+                                </div>
+                            </div>
+                            <div class="rule-item">
+                                <div class="rule-name">去重</div>
+                                <div class="rule-actions">
+                                    <button class="btn btn-secondary" onclick="editRule(3)">编辑</button>
+                                    <button class="btn btn-secondary" onclick="deleteRule(3)">删除</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="cleaning-module">
+                        <div class="cleaning-module-header">
+                            <div class="cleaning-module-title">业务数据清理</div>
+                            <button class="btn btn-secondary" onclick="addCleaningRule('business-data')">添加规则</button>
+                        </div>
+                        <div class="cleaning-module-content">
+                            <div class="rule-item">
+                                <div class="rule-name">日期格式统一</div>
+                                <div class="rule-actions">
+                                    <button class="btn btn-secondary" onclick="editRule(4)">编辑</button>
+                                    <button class="btn btn-secondary" onclick="deleteRule(4)">删除</button>
+                                </div>
+                            </div>
+                            <div class="rule-item">
+                                <div class="rule-name">数值标准化</div>
+                                <div class="rule-actions">
+                                    <button class="btn btn-secondary" onclick="editRule(5)">编辑</button>
+                                    <button class="btn btn-secondary" onclick="deleteRule(5)">删除</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="cleaning-module">
+                        <div class="cleaning-module-header">
+                            <div class="cleaning-module-title">关联数据清理</div>
+                            <button class="btn btn-secondary" onclick="addCleaningRule('relationship-data')">添加规则</button>
+                        </div>
+                        <div class="cleaning-module-content">
+                            <div class="rule-item">
+                                <div class="rule-name">外键完整性检查</div>
+                                <div class="rule-actions">
+                                    <button class="btn btn-secondary" onclick="editRule(6)">编辑</button>
+                                    <button class="btn btn-secondary" onclick="deleteRule(6)">删除</button>
+                                </div>
+                            </div>
+                            <div class="rule-item">
+                                <div class="rule-name">关联数据同步</div>
+                                <div class="rule-actions">
+                                    <button class="btn btn-secondary" onclick="editRule(7)">编辑</button>
+                                    <button class="btn btn-secondary" onclick="deleteRule(7)">删除</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 模板管理内容 -->
+                <div id="templates-content" class="content-section">
+                    <div class="card">
+                        <div class="card-title">
+                            <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-template"></use></svg>
+                            <span>模板列表</span>
+                        </div>
+                        <table class="table table-head-dark">
+                            <thead>
+                                <tr>
+                                    <th>模板名称</th>
+                                    <th>类型</th>
+                                    <th>规则数量</th>
+                                    <th>创建日期</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>基础配置清理模板</td>
+                                    <td>基础配置</td>
+                                    <td>3</td>
+                                    <td>2026-04-06</td>
+                                    <td>
+                                        <button class="btn btn-secondary" onclick="editTemplate(1)">编辑</button>
+                                        <button class="btn btn-secondary" onclick="exportTemplate(1)">导出</button>
+                                        <button class="btn btn-secondary" onclick="deleteTemplate(1)">删除</button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>业务单据清理模板</td>
+                                    <td>业务数据</td>
+                                    <td>2</td>
+                                    <td>2026-04-06</td>
+                                    <td>
+                                        <button class="btn btn-secondary" onclick="editTemplate(2)">编辑</button>
+                                        <button class="btn btn-secondary" onclick="exportTemplate(2)">导出</button>
+                                        <button class="btn btn-secondary" onclick="deleteTemplate(2)">删除</button>
+                                    </td>
+                                </tr>
+                                <tr>
+                                    <td>关联数据清理模板</td>
+                                    <td>关联数据</td>
+                                    <td>2</td>
+                                    <td>2026-04-06</td>
+                                    <td>
+                                        <button class="btn btn-secondary" onclick="editTemplate(3)">编辑</button>
+                                        <button class="btn btn-secondary" onclick="exportTemplate(3)">导出</button>
+                                        <button class="btn btn-secondary" onclick="deleteTemplate(3)">删除</button>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 数据分析内容 -->
+                <div id="analysis-content" class="content-section">
+                    <div class="card">
+                        <div class="card-title">
+                            <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-scan"></use></svg>
+                            <span>文件分析</span>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">分析选项</label>
+                            <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    <span>工作表结构</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    <span>数据质量</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    <span>数据统计</span>
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="checkbox" checked>
+                                    <span>异常值检测</span>
+                                </label>
+                            </div>
+                        </div>
+                        <button class="btn btn-success" onclick="runFileAnalysis()">运行分析</button>
+                    </div>
+                </div>
+
+                <!-- 设置内容 -->
+                <div id="settings-content" class="content-section">
+                    <div class="card">
+                        <div class="card-title">
+                            <svg class="icon-svg" viewBox="0 0 24 24"><use xlink:href="#ico-config"></use></svg>
+                            <span>通用设置</span>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">默认文件路径</label>
+                            <input type="text" class="form-control" placeholder="设置默认文件路径">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">默认编码</label>
+                            <select class="form-control">
+                                <option value="utf-8">UTF-8</option>
+                                <option value="gb2312">GB2312</option>
+                                <option value="gbk">GBK</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">自动保存</label>
+                            <label style="display: flex; align-items: center; gap: 4px;">
+                                <input type="checkbox" checked>
+                                <span>启用自动保存</span>
+                            </label>
+                        </div>
+                        <button class="btn btn-success" onclick="saveSettings()">保存设置</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 底部状态栏 -->
+        <div class="global-status-bar">
+            <div class="status-item">
+                <span class="status-text" id="status-text">就绪</span>
+            </div>
+            <div class="status-item">
+                <span>ExcelSQLite v1.0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            initRibbon();
+            initContentSections();
+        });
+
+        // 初始化 Ribbon
+        function initRibbon() {
+            const tabButtons = document.querySelectorAll('.ribbon-tab-btn');
+            tabButtons.forEach(button => {
+                button.addEventListener('click', function() {
+                    // 移除所有激活状态
+                    tabButtons.forEach(btn => btn.classList.remove('active'));
+                    document.querySelectorAll('.ribbon-panel').forEach(panel => panel.classList.remove('active'));
+                    document.querySelectorAll('.content-section').forEach(section => section.classList.remove('active'));
+                    
+                    // 添加激活状态
+                    this.classList.add('active');
+                    const panelId = this.getAttribute('data-panel');
+                    document.getElementById(panelId).classList.add('active');
+                    document.getElementById(panelId + '-content').classList.add('active');
+                });
+            });
+        }
+
+        // 初始化内容区域
+        function initContentSections() {
+            // 隐藏所有内容区域
+            document.querySelectorAll('.content-section').forEach(section => {
+                section.classList.remove('active');
+            });
+            // 显示首页
+            document.getElementById('home-content').classList.add('active');
+        }
+
+        // 加载 Excel 文件
+        function loadExcel() {
+            // 模拟文件选择
+            document.getElementById('current-file').textContent = '示例文件.xlsx';
+            // 模拟工作表加载
+            const worksheetSelect = document.getElementById('worksheet-select');
+            worksheetSelect.innerHTML = `
+                <option value="">请选择工作表</option>
+                <option value="Sheet1">Sheet1</option>
+                <option value="Sheet2">Sheet2</option>
+                <option value="Sheet3">Sheet3</option>
+            `;
+            updateStatus('已加载 Excel 文件');
+        }
+
+        // 运行清理
+        function runCleaning() {
+            updateStatus('正在执行数据清理...');
+            setTimeout(() => {
+                updateStatus('数据清理完成');
+                alert('数据清理已完成！');
+            }, 1500);
+        }
+
+        // 导出结果
+        function exportResults() {
+            updateStatus('正在导出结果...');
+            setTimeout(() => {
+                updateStatus('结果导出完成');
+                alert('结果已导出！');
+            }, 1000);
+        }
+
+        // 清理基础配置
+        function cleanBasicConfig() {
+            switchToTab('data-cleaning');
+            updateStatus('进入基础配置清理模式');
+        }
+
+        // 清理业务数据
+        function cleanBusinessData() {
+            switchToTab('data-cleaning');
+            updateStatus('进入业务数据清理模式');
+        }
+
+        // 清理关联数据
+        function cleanRelationshipData() {
+            switchToTab('data-cleaning');
+            updateStatus('进入关联数据清理模式');
+        }
+
+        // 切换到指定标签
+        function switchToTab(tabId) {
+            document.querySelectorAll('.ribbon-tab-btn').forEach(btn => {
+                if (btn.getAttribute('data-panel') === tabId) {
+                    btn.click();
+                }
+            });
+        }
+
+        // 更新状态栏
+        function updateStatus(message) {
+            document.getElementById('status-text').textContent = message;
+        }
+
+        // 显示帮助
+        function showHelp() {
+            alert('ExcelSQLite 数据清理工具\n\n功能：\n- 基础配置及映射数据清理\n- 业务单据记录数据清理\n- 基础配置与业务记录关联清理\n\n版本：v1.0');
+        }
+
+        // 显示关于
+        function showAbout() {
+            alert('ExcelSQLite\n版本：v1.0\n描述：用于 P0/P1 级数据清理的工具\n\n© 2026 ExcelSQLite Team');
+        }
+
+        // 其他函数（简化实现）
+        function loadTemplate(templateId) {
+            updateStatus('加载模板：' + templateId);
+            document.getElementById('template-select').value = templateId;
+        }
+
+        function previewTemplate(templateId) {
+            alert('预览模板：' + templateId);
+        }
+
+        function addCleaningRule(type) {
+            alert('添加清理规则：' + type);
+        }
+
+        function editRule(ruleId) {
+            alert('编辑规则：' + ruleId);
+        }
+
+        function deleteRule(ruleId) {
+            if (confirm('确定要删除此规则吗？')) {
+                alert('删除规则：' + ruleId);
+            }
+        }
+
+        function createTemplate() {
+            switchToTab('templates');
+            alert('创建新模板');
+        }
+
+        function editTemplate(templateId) {
+            alert('编辑模板：' + templateId);
+        }
+
+        function deleteTemplate(templateId) {
+            if (confirm('确定要删除此模板吗？')) {
+                alert('删除模板：' + templateId);
+            }
+        }
+
+        function importTemplate() {
+            alert('导入模板');
+        }
+
+        function exportTemplate(templateId) {
+            alert('导出模板：' + templateId);
+        }
+
+        function manageTemplates() {
+            switchToTab('templates');
+        }
+
+        function analyzeFile() {
+            switchToTab('analysis');
+            updateStatus('进入文件分析模式');
+        }
+
+        function analyzeWorksheet() {
+            switchToTab('analysis');
+            updateStatus('进入工作表分析模式');
+        }
+
+        function generateReport() {
+            updateStatus('生成分析报告...');
+            setTimeout(() => {
+                updateStatus('报告生成完成');
+                alert('分析报告已生成！');
+            }, 1500);
+        }
+
+        function visualizeData() {
+            alert('数据可视化功能');
+        }
+
+        function runFileAnalysis() {
+            updateStatus('正在分析文件...');
+            setTimeout(() => {
+                updateStatus('文件分析完成');
+                alert('文件分析已完成！');
+            }, 2000);
+        }
+
+        function generalSettings() {
+            switchToTab('settings');
+        }
+
+        function advancedSettings() {
+            alert('高级设置功能');
+        }
+
+        function saveSettings() {
+            updateStatus('保存设置...');
+            setTimeout(() => {
+                updateStatus('设置保存完成');
+                alert('设置已保存！');
+            }, 500);
+        }
+
+        function manageRules() {
+            alert('规则管理功能');
+        }
+
+        function batchCleaning() {
+            alert('批量清理功能');
+        }
+    </script>
+</body>
+</html>

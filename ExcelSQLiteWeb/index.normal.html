@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ExcelSQLite - 普通用户</title>
+</head>
+<body style="font-family: Microsoft YaHei, sans-serif; font-size: 10pt; color:#333; padding:14px;">
+  <div>正在进入【普通用户】模式...</div>
+  <script>
+    (function () {
+      try { localStorage.setItem('userMode', 'normal'); } catch (_) { }
+      var sp = new URLSearchParams(location.search || '');
+      var ts = sp.get('ts') || String(Date.now());
+      location.replace('index.html?ts=' + encodeURIComponent(ts) + '&mode=normal');
+    })();
+  </script>
+</body>
+</html>
