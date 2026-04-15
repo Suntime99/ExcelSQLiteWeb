@@ -67,5 +67,52 @@ VALUES
   ('tplr_addr_zh_收货地址',   'tpl_pii_basic_tokenize_v1', NULL, '收货地址',   'ADDR', 'TOKENIZE', NULL, NULL, 0, 'addr', NULL, 'fail', 1, 42),
   ('tplr_addr_en_address',    'tpl_pii_basic_tokenize_v1', NULL, 'address',    'ADDR', 'TOKENIZE', NULL, NULL, 0, 'addr', NULL, 'fail', 1, 43);
 
+-- Namespace：DEFAULT
+-- Template：ORG-企业基础脱敏（Tokenize）
+INSERT OR IGNORE INTO template(id, namespace, name, description, created_at, created_by, updated_at, updated_by)
+VALUES (
+  'tpl_org_basic_tokenize_v1',
+  'DEFAULT',
+  'ORG-企业基础脱敏(Tokenize)',
+  '基础企业脱敏模板：企业名称/统一社会信用代码/法人/电话 -> *_token（可选 *_masked）',
+  datetime('now'),
+  'system',
+  datetime('now'),
+  'system'
+);
+
+-- ORG_NAME
+INSERT OR IGNORE INTO template_rule(
+  id, template_id, table_name, column_name, data_type, action,
+  output_token_col, output_mask_col, keep_raw_col,
+  normalize_profile, normalize_params, on_error, enabled, sort_order
+)
+VALUES
+  ('tplr_orgname_zh_企业名称', 'tpl_org_basic_tokenize_v1', NULL, '企业名称', 'ORG_NAME', 'TOKENIZE', NULL, NULL, 0, 'name', NULL, 'fail', 1, 10),
+  ('tplr_orgname_zh_公司名称', 'tpl_org_basic_tokenize_v1', NULL, '公司名称', 'ORG_NAME', 'TOKENIZE', NULL, NULL, 0, 'name', NULL, 'fail', 1, 11),
+  ('tplr_orgname_zh_单位名称', 'tpl_org_basic_tokenize_v1', NULL, '单位名称', 'ORG_NAME', 'TOKENIZE', NULL, NULL, 0, 'name', NULL, 'fail', 1, 12),
+  ('tplr_orgname_en_company',  'tpl_org_basic_tokenize_v1', NULL, 'company',  'ORG_NAME', 'TOKENIZE', NULL, NULL, 0, 'name', NULL, 'fail', 1, 13);
+
+-- TAX_ID / ORG_CODE
+INSERT OR IGNORE INTO template_rule(
+  id, template_id, table_name, column_name, data_type, action,
+  output_token_col, output_mask_col, keep_raw_col,
+  normalize_profile, normalize_params, on_error, enabled, sort_order
+)
+VALUES
+  ('tplr_taxid_zh_信用代码', 'tpl_org_basic_tokenize_v1', NULL, '统一社会信用代码', 'TAX_ID', 'TOKENIZE', NULL, NULL, 0, 'idno', NULL, 'fail', 1, 20),
+  ('tplr_taxid_zh_税号',     'tpl_org_basic_tokenize_v1', NULL, '税号', 'TAX_ID', 'TOKENIZE', NULL, NULL, 0, 'idno', NULL, 'fail', 1, 21),
+  ('tplr_taxid_zh_机构代码', 'tpl_org_basic_tokenize_v1', NULL, '机构代码', 'ORG_CODE', 'TOKENIZE', NULL, NULL, 0, 'idno', NULL, 'fail', 1, 22);
+
+-- LEGAL_PERSON
+INSERT OR IGNORE INTO template_rule(
+  id, template_id, table_name, column_name, data_type, action,
+  output_token_col, output_mask_col, keep_raw_col,
+  normalize_profile, normalize_params, on_error, enabled, sort_order
+)
+VALUES
+  ('tplr_legal_zh_法定代表人', 'tpl_org_basic_tokenize_v1', NULL, '法定代表人', 'LEGAL_PERSON', 'TOKENIZE', NULL, NULL, 0, 'name', NULL, 'fail', 1, 30),
+  ('tplr_legal_zh_法人',       'tpl_org_basic_tokenize_v1', NULL, '法人', 'LEGAL_PERSON', 'TOKENIZE', NULL, NULL, 0, 'name', NULL, 'fail', 1, 31);
+
 COMMIT;
 

@@ -371,20 +371,35 @@ public class SqliteManager : IDisposable
         var columns = new List<string>();
 
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
-        for (int i = 0; i < reader.FieldCount; i++)
+        
+        // 循环读取所有的结果集（支持多语句执行时返回最后一个有效查询结果集或累加结果）
+        bool hasResultSet = false;
+        do
         {
-            columns.Add(reader.GetName(i));
-        }
-
-        while (await reader.ReadAsync(cancellationToken))
-        {
-            var dict = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
-            for (int i = 0; i < columns.Count; i++)
+            var currentCols = new List<string>();
+            for (int i = 0; i < reader.FieldCount; i++)
             {
-                dict[columns[i]] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                currentCols.Add(reader.GetName(i));
             }
-            rows.Add(dict);
-        }
+            
+            // 如果存在列，则认为是一个有效的查询结果集，覆盖之前的列和行（通常多语句查询我们只关心最后一个，或者可以考虑合并）
+            // 这里采用：只要当前结果集有列，就重置并读取当前结果集
+            if (currentCols.Count > 0)
+            {
+                hasResultSet = true;
+                columns = currentCols;
+                rows.Clear();
+                while (await reader.ReadAsync(cancellationToken))
+                {
+                    var dict = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+                    for (int i = 0; i < columns.Count; i++)
+                    {
+                        dict[columns[i]] = reader.IsDBNull(i) ? null : reader.GetValue(i);
+                    }
+                    rows.Add(dict);
+                }
+            }
+        } while (await reader.NextResultAsync(cancellationToken));
 
         return (columns, rows);
     }

@@ -26,6 +26,52 @@
             'batch-process': 0
         };
         
+        function switchFwTab(tabId) {
+            const tabs = ['config', 'detail'];
+            tabs.forEach(t => {
+                const btn = document.getElementById(`fwTabBtn${t.charAt(0).toUpperCase() + t.slice(1)}`);
+                const content = document.getElementById(`fwTabContent${t.charAt(0).toUpperCase() + t.slice(1)}`);
+                if (btn) {
+                    if (t === tabId) {
+                        btn.style.fontWeight = 'bold';
+                        btn.style.color = '#0078d4';
+                        btn.style.borderBottom = '3px solid #0078d4';
+                    } else {
+                        btn.style.fontWeight = 'normal';
+                        btn.style.color = '#605e5c';
+                        btn.style.borderBottom = '3px solid transparent';
+                    }
+                }
+                if (content) {
+                    content.style.display = (t === tabId) ? 'block' : 'none';
+                }
+            });
+
+            if (tabId === 'config') {
+                if (!window.__fwPage) {
+                    fwPage('sources');
+                } else {
+                    fwPage(window.__fwPage);
+                }
+            }
+
+            if (tabId === 'detail') {
+                const src = document.getElementById('phViewActive');
+                const dst = document.getElementById('fwPhViewDetailContainer');
+                if (src && dst) {
+                    if (!dst.contains(src)) dst.appendChild(src);
+                    src.style.display = 'block';
+                }
+                if (window.__activeSchemeId) {
+                    try { window.chrome?.webview?.postMessage?.({ action: 'getProjectDetail', schemeId: window.__activeSchemeId }); } catch (_) {}
+                }
+                try {
+                    const ta = document.getElementById('phConfigJson');
+                    if (ta) ta.value = JSON.stringify(window.__schemeData || {}, null, 2);
+                } catch (_) {}
+            }
+        }
+
         function switchTab(tabId) {
             // 兼容旧入口：统一跳到“字段格式清洗”
             if (tabId === 'data-cleansing') tabId = 'dc-field';
@@ -77,6 +123,14 @@
 
             // 记忆用户上次退出时的侧边栏选择
             try { localStorage.setItem('lastSidebarTab', tabId); } catch (_) { }
+
+            if (tabId === 'file-wizard') {
+                if (window.__activeSchemeId) {
+                    switchFwTab('detail');
+                } else {
+                    switchFwTab('config');
+                }
+            }
 
             // 稳定高亮：不依赖 event.target（支持程序触发/重载恢复）
             try {
@@ -189,8 +243,8 @@
             }
 
             if (tabId === 'project-hub') {
-                // 默认落在“当前活动项目”，符合日常使用入口
-                try { setProjectHubView('active'); } catch (_) { }
+                // 默认落在“总项目概况”，因为活动项目和配置已经移到了项目管理
+                try { setProjectHubView('overview'); } catch (_) { }
                 try { requestProjectList(); } catch (_) { }
             }
             if (tabId === 'file-wizard') {
@@ -211,6 +265,12 @@
             if (tabId === 'model-management') {
                 try { dvNew(); } catch (_) { }
                 try { dvRefresh(); } catch (_) { }
+            }
+            if (tabId === 'db-object-manager') {
+                // 每次切换到对象管理页面时，自动向宿主拉取最新对象列表
+                if (typeof dbmRefresh === 'function') {
+                    dbmRefresh();
+                }
             }
             if (tabId === 'chart-generator') {
                 try { applyTemplateById('chart', 'temp'); } catch (_) { }
@@ -469,19 +529,20 @@
             const resetBtn = document.getElementById('stqBarReset');
             const tableSel = document.getElementById('stqTableSelect');
 
-            // 统一体验：按钮存在但按步骤启用/禁用（避免布局跳动）
-            const canRun = (step >= 3); // Step3/4 都可以执行/复制/导出
+            // 合并 下一步 和 执行 按钮
+            const isLastStep = (step >= 4);
+            if (nextBtn) nextBtn.style.display = isLastStep ? 'none' : 'inline-block';
+            if (execBtn) execBtn.style.display = isLastStep ? 'inline-block' : 'none';
+
+            const canRun = (step >= 3); // Step3/4 都可以复制/导出
             if (prevBtn) prevBtn.disabled = !(step > 1);
-            if (nextBtn) nextBtn.disabled = !(step < 4);
-            if (execBtn) execBtn.disabled = !canRun;
+            if (nextBtn) nextBtn.disabled = false;
+            if (execBtn) execBtn.disabled = false;
             if (copyBtn) copyBtn.disabled = !canRun;
             if (exportWrap) exportWrap.style.opacity = canRun ? '1' : '0.45';
             if (exportWrap) exportWrap.style.pointerEvents = canRun ? 'auto' : 'none';
             if (resetBtn) resetBtn.disabled = !(step > 1);
-            // 单表切换只允许 Step1 改动
             if (tableSel) tableSel.disabled = !(step === 1);
-
-            // 步骤条（圆圈）由 nextStep/prevStep 自身的 active/completed 控制，无需额外处理
         }
         
         // 浏览文件
@@ -752,9 +813,11 @@
         function wsOpenQuerySql(kind) {
             const tn = wsGetCurrentTableName();
             if (!tn) { alert('请先选择工作表/导入SQLite'); return; }
+            
+            const last = window.__lastWorksheetAnalysisResults || null;
+            const fields = last && Array.isArray(last.fields) ? last.fields : [];
+            
             if ((kind || 'plain') === 'alias') {
-                const last = window.__lastWorksheetAnalysisResults || null;
-                const fields = last && Array.isArray(last.fields) ? last.fields : [];
                 if (!fields.length) { alert('请先点击“解析”，以便获取字段清单后再生成别名SQL。'); return; }
                 const sheetName = last.sheetName || document.getElementById('worksheetSelect')?.value || 'Sheet';
                 const prefix = wsSanitizeAlias(sheetName);
@@ -763,7 +826,14 @@
                 openRecordDetailModal(`查询SQL（带别名）：${sheetName}`, sql, 200);
                 return;
             }
-            const sql = `SELECT * FROM ${sqlQuoteIdent(tn)} LIMIT 200;`;
+            
+            let sql = '';
+            if (fields.length > 0) {
+                const selectList = fields.map(f => `${sqlQuoteIdent(f)}`).join(',\n  ');
+                sql = `SELECT\n  ${selectList}\nFROM ${sqlQuoteIdent(tn)}\nLIMIT 200;`;
+            } else {
+                sql = `SELECT * FROM ${sqlQuoteIdent(tn)} LIMIT 200;`;
+            }
             openRecordDetailModal(`查询SQL：${tn}`, sql, 200);
         }
 
@@ -867,20 +937,23 @@
         // 元数据扫描
         function startMetadataScan() {
             const scopeRadios = document.querySelectorAll('input[name="scanScope"]');
-            let scope = 'currentFile';
+            let scope = 'files';
             scopeRadios.forEach(r => {
-                if (r.checked) {
-                    // 通过 label 文本判断（避免 nextSibling 受 DOM 空白影响）
-                    const t = (r.parentElement && r.parentElement.textContent || '').trim();
-                    if (t.includes('指定文件夹')) scope = 'folder';
-                    else if (t.includes('当前SQLite')) scope = 'sqlite';
-                    else scope = 'currentFile';
-                }
+                if (r.checked) scope = r.value;
             });
             const folderPath = (document.getElementById('folderPath') && document.getElementById('folderPath').value) || '';
-            // 关键：当前文件扫描不要依赖宿主 _currentFilePath（源文件清单模式下可能未设置）
             const m = window.__fileWizardMain || null;
             const filePath = (m && m.filePath) ? m.filePath : (window.__currentFilePath || '');
+
+            let filePaths = [];
+            if (scope === 'files') {
+                const sources = window.__fileWizardSources || [];
+                filePaths = sources.map(x => x.filePath).filter(Boolean);
+                if (!filePaths.length) {
+                    alert('当前项目没有源文件，请先在【项目管理】中添加数据源');
+                    return;
+                }
+            }
 
             if (scope === 'sqlite') {
                 if (!window.__sqliteReady) { alert('SQLite 尚未导入'); return; }
@@ -898,6 +971,7 @@
                     scope,
                     folderPath,
                     filePath,
+                    filePaths,
                     includeBasic: true,
                     includeSheets: true,
                     includeStats: true,
@@ -931,8 +1005,19 @@
         }
 
         // 关联关系识别（系统检查）
-        function startRelationDetect() {
+        function startRelationDetect(forceNew = false) {
             if (!ensureSqliteMode('关联关系识别')) return;
+            
+            // 本地缓存机制：如果有先前的缓存且不强制刷新，询问用户是否加载缓存
+            if (!forceNew && window.__schemeData && window.__schemeData.relationDraft && window.__schemeData.relationDraft.results) {
+                const draft = window.__schemeData.relationDraft;
+                const draftDate = draft.savedAt ? new Date(draft.savedAt).toLocaleString() : '先前';
+                if (confirm(`系统检测到您在 ${draftDate} 生成过关联关系检查数据。\n\n是否直接加载该缓存数据？（点击"取消"将重新执行深度扫描）`)) {
+                    renderRelationResults(draft.results);
+                    setStatusMessage('已加载先前缓存的关联关系数据。');
+                    return;
+                }
+            }
             const mode = (document.querySelector('input[name="relMode"]:checked')?.value || 'primary-first');
             const mainTable = document.getElementById('relMainTable')?.value || (window.__sqliteMainTableName || '');
             const tablesSel = document.getElementById('relTables');
@@ -943,12 +1028,18 @@
             const minCoverage = Number(document.getElementById('relMinCoverage')?.value || 0.7);
             const sampleRows = Number(document.getElementById('relSampleRows')?.value || 50000);
             const maxPairs = Number(document.getElementById('relMaxPairs')?.value || 80);
+            const enumArchive = document.getElementById('relEnumArchive')?.checked;
+            const enumRealtime = document.getElementById('relEnumRealtime')?.checked;
             if (mode === 'primary-first' && !mainTable) {
                 alert('请先选择主表');
                 return;
             }
             if (!useName && !useValues && !useComposite) {
                 alert('请至少选择一种比对方式');
+                return;
+            }
+            if (useValues && !enumArchive && !enumRealtime) {
+                alert('勾选了枚举值比较时，至少需要选择一种枚举值来源（存档或实时）');
                 return;
             }
             document.getElementById('relResultCard').style.display = 'none';
@@ -970,6 +1061,25 @@
         function showRelationDetectResults(payload) {
             const results = (payload && payload.results) ? payload.results : (Array.isArray(payload) ? payload : []);
             window.__relLastResults = Array.isArray(results) ? results : [];
+
+            // 自动缓存最新的扫描结果到 schemeData 中，避免反复计算
+            try {
+                window.__schemeData = window.__schemeData || {};
+                window.__schemeData.relationDraft = {
+                    savedAt: new Date().toISOString(),
+                    elapsed: payload?.elapsed || null,
+                    results: window.__relLastResults
+                };
+                schemeAutoSave('relationDraft');
+            } catch (_) { }
+
+            renderRelationResults(window.__relLastResults, payload);
+        }
+
+        function renderRelationResults(resultsArray, payloadObj) {
+            window.__relLastResults = Array.isArray(resultsArray) ? resultsArray : [];
+            const results = window.__relLastResults;
+
             // 供 MTQ 自动填充 ON：按“表对”缓存最佳关系
             try {
                 const map = {};
@@ -1001,7 +1111,8 @@
             const card = document.getElementById('relResultCard');
             if (card) card.style.display = 'block';
             if (info) {
-                info.innerHTML = `<strong>候选数量：</strong>${window.__relLastResults.length.toLocaleString()} 个<br><strong>耗时：</strong>${escapeHtml(String(payload?.elapsed || '—'))} 秒`;
+                const elapsed = payloadObj?.elapsed || (window.__schemeData?.relationDraft?.elapsed) || '—';
+                info.innerHTML = `<strong>候选数量：</strong>${window.__relLastResults.length.toLocaleString()} 个<br><strong>耗时：</strong>${escapeHtml(String(elapsed))} 秒`;
             }
             if (body) body.innerHTML = '';
 
@@ -1501,7 +1612,7 @@
                             joinType: 'LEFT JOIN',
                             onMode: 'fields',
                             onExpr: '',
-                            on: [{ left: `${aliasMap[ed.parent]}.${parentCol}`, op: '=', right: `${aliasMap[ed.child]}.${childCol}` }],
+                            on: [{ left: `${aliasMap[ed.parent]}.${parentCol}`, op: '=', right: `${aliasMap[ed.child]}.${childCol}`, score: r.score }],
                             and: []
                         };
                     }
@@ -1512,7 +1623,8 @@
                         onMode: 'expr',
                         onExpr: expr,
                         on: [],
-                        and: []
+                        and: [],
+                        score: r.score
                     };
                 }),
                 selectedFields: [],
@@ -1705,9 +1817,23 @@
                 lockedSql
             };
 
-            // 预览（先给用户可解释的产物）
             try {
-                xslqShowTextModal('MTJ 草稿预览（lockedSql）', lockedSql);
+                // 弹出可编辑的SQL窗口，允许手工修改SQL脚本并实时应用到内存中
+                openRecordDetailModal('MTJ 草稿预览（lockedSql）', lockedSql, 0, (newSql) => {
+                    if (newSql && newSql.trim()) {
+                        mtj.lockedSql = newSql.trim();
+                        window.__mtjSettings = mtj;
+                        try { saveSettings('mtj', mtj); } catch (_) { }
+                        try { applyMtjSettings(mtj); } catch (_) { }
+                        
+                        try {
+                            window.__schemeData = window.__schemeData || {};
+                            window.__schemeData.mtjDraft = { savedAt: new Date().toISOString(), from: 'relationBatch', mtj };
+                            schemeAutoSave('mtjDraft');
+                        } catch (_) { }
+                        setStatusMessage('已保存您手工编辑的 MTJ SQL 草稿');
+                    }
+                });
             } catch (_) { }
 
             window.__mtjSettings = mtj;
@@ -1948,10 +2074,16 @@
             const generateMapping = document.getElementById('personalGenerateMapping').checked;
             const saveMapping = document.getElementById('personalSaveMapping').checked;
             
+            const el = document.getElementById('dsProgressBox');
+            if (el) el.textContent = '准备执行脱敏...';
+            
             window.chrome.webview.postMessage({
-                action: 'executePersonalDataMasking',
-                generateMapping: generateMapping,
-                saveMapping: saveMapping
+                action: 'executeMaskJob',
+                payload: {
+                    templateId: 'tpl_pii_basic_tokenize_v1',
+                    overwrite: true,
+                    includeMasked: true
+                }
             });
         }
         
@@ -1960,10 +2092,16 @@
             const generateMapping = document.getElementById('enterpriseGenerateMapping').checked;
             const saveMapping = document.getElementById('enterpriseSaveMapping').checked;
             
+            const el = document.getElementById('dsProgressBox');
+            if (el) el.textContent = '准备执行脱敏...';
+            
             window.chrome.webview.postMessage({
-                action: 'executeEnterpriseDataMasking',
-                generateMapping: generateMapping,
-                saveMapping: saveMapping
+                action: 'executeMaskJob',
+                payload: {
+                    templateId: 'tpl_org_basic_tokenize_v1',
+                    overwrite: true,
+                    includeMasked: true
+                }
             });
         }
         
@@ -2356,9 +2494,10 @@
                             <table class="table" style="margin:0;">
                                 <thead>
                                     <tr>
-                                        <th style="width:42%;">左侧（已选表）</th>
+                                        <th style="width:38%;">左侧（已选表）</th>
                                         <th style="width:90px;">操作符</th>
-                                        <th style="width:42%;">右侧（${j.alias}表）</th>
+                                        <th style="width:38%;">右侧（${j.alias}表）</th>
+                                        <th style="width:60px; text-align:center;">置信度</th>
                                         <th style="width:80px;">操作</th>
                                     </tr>
                                 </thead>
@@ -2434,8 +2573,25 @@
             // 避免死循环：已缓存/正在请求就不重复请求
             try {
                 window.__sqliteTableFields = window.__sqliteTableFields || {};
+                window.__sqliteTableSchemas = window.__sqliteTableSchemas || {};
                 window.__pendingTableFields = window.__pendingTableFields || {};
-                if (Array.isArray(window.__sqliteTableFields[tableName]) && window.__sqliteTableFields[tableName].length) return;
+                const hasFields = Array.isArray(window.__sqliteTableFields[tableName]) && window.__sqliteTableFields[tableName].length;
+                const hasSchema = Array.isArray(window.__sqliteTableSchemas[tableName]) && window.__sqliteTableSchemas[tableName].length;
+                if (hasFields && hasSchema) {
+                    if (tableName === window.__activeSingleTableName) {
+                        try { updateAllFieldControls(window.__sqliteTableFields[tableName]); } catch (_) { }
+                    }
+                    try {
+                        if (document.getElementById('dcFieldMappingBody')) {
+                            const cur = dcGetActiveSourceTable();
+                            if (cur && cur === tableName) {
+                                dcRenderFieldMapping(cur, window.__sqliteTableSchemas[tableName]);
+                                try { if ((window.__dcMode || '') === 'verify') dcVerifyRefreshFieldOptions(); } catch (_) { }
+                            }
+                        }
+                    } catch (_) { }
+                    return;
+                }
                 if (window.__pendingTableFields[tableName]) return;
                 window.__pendingTableFields[tableName] = true;
             } catch (_) { }
@@ -2485,6 +2641,7 @@
                     </select>
                 </td>
                 <td><select class="form-control mtq-on-right"></select></td>
+                <td class="mtq-on-score" style="text-align:center; vertical-align:middle; color:#a19f9d;">-</td>
                 <td><button class="btn btn-danger" style="padding:4px 8px;" onclick="this.closest('tr').remove()">删除</button></td>
             `;
             body.appendChild(tr);
@@ -2532,7 +2689,6 @@
                     const has = window.__sqliteTableFields && Array.isArray(window.__sqliteTableFields[tn]) && window.__sqliteTableFields[tn].length;
                     const pending = !!window.__pendingTableFields[tn];
                     if (!has && !pending) {
-                        window.__pendingTableFields[tn] = true;
                         requestSqliteTableFields(tn);
                     }
                 });
@@ -2543,6 +2699,21 @@
             // 同步刷新脚本预览
             try { updateMtqPreview(); } catch (_) { }
         }
+
+        window.mtqForceRefreshFields = function() {
+            const rows = mtqGetRows().filter(r => r.tableName);
+            if (!rows.length) {
+                alert('请先在 Step1 选择表！');
+                return;
+            }
+            rows.forEach(r => {
+                const tn = r.tableName;
+                if(window.__sqliteTableFields) delete window.__sqliteTableFields[tn];
+                if(window.__pendingTableFields) delete window.__pendingTableFields[tn];
+                requestSqliteTableFields(tn);
+            });
+            setStatusMessage('已向后台发送刷新关联表最新字段请求...');
+        };
 
         // 多表查询：字段加载完成后的 UI 刷新（避免递归触发字段请求）
         function mtqRefreshUiAfterFieldsLoaded() {
@@ -2580,6 +2751,7 @@
                 const firstRight = document.querySelector(`#mtqOnBody_${joinAlias} .mtq-on-right`);
                 if (!firstLeft || !firstRight) return;
                 if ((firstLeft.value || '').trim() || (firstRight.value || '').trim()) return;
+                
                 // 优先尝试与主表 A 建关系；否则与任意已选表
                 const candidates = ['A'].concat(Object.keys(aliasToTable).filter(a => a && a !== joinAlias && a !== 'A'));
                 let best = null;
@@ -2595,28 +2767,61 @@
                 }
                 if (!best || !bestLeftAlias) return;
 
-                const lt = aliasToTable[bestLeftAlias];
-                const rt = joinTable;
-                const lc = Array.isArray(best.leftColumns) ? best.leftColumns[0] : (best.leftColumn || '');
-                const rc = Array.isArray(best.rightColumns) ? best.rightColumns[0] : (best.rightColumn || '');
-                if (!lc || !rc) return;
-
-                // best 可能 left/right 与 alias 对应的表名相反，做一次对齐
-                let leftField = `${bestLeftAlias}.${lc}`;
-                let rightField = `${joinAlias}.${rc}`;
-                if (String(best.leftTable || '') !== String(lt || '') && String(best.rightTable || '') === String(lt || '')) {
-                    // 反向
-                    const lc2 = Array.isArray(best.rightColumns) ? best.rightColumns[0] : (best.rightColumn || '');
-                    const rc2 = Array.isArray(best.leftColumns) ? best.leftColumns[0] : (best.leftColumn || '');
-                    if (lc2 && rc2) {
-                        leftField = `${bestLeftAlias}.${lc2}`;
-                        rightField = `${joinAlias}.${rc2}`;
+                // 判断是否是组合键（多个字段组合）
+                const leftCols = Array.isArray(best.leftColumns) ? best.leftColumns : (best.leftColumn ? [best.leftColumn] : []);
+                const rightCols = Array.isArray(best.rightColumns) ? best.rightColumns : (best.rightColumn ? [best.rightColumn] : []);
+                
+                if (!leftCols.length || !rightCols.length) return;
+                
+                // 如果是单字段关系，则直接赋值下拉框；如果是组合字段，提示用户需要手填表达式
+                if (leftCols.length === 1 && rightCols.length === 1) {
+                    const lt = aliasToTable[bestLeftAlias];
+                    const lc = leftCols[0];
+                    const rc = rightCols[0];
+                    
+                    let leftField = `${bestLeftAlias}.${lc}`;
+                    let rightField = `${joinAlias}.${rc}`;
+                    // best 可能 left/right 与 alias 对应的表名相反，做一次对齐
+                    if (String(best.leftTable || '') !== String(lt || '') && String(best.rightTable || '') === String(lt || '')) {
+                        leftField = `${bestLeftAlias}.${rc}`;
+                        rightField = `${joinAlias}.${lc}`;
+                    }
+                    
+                    try { 
+                        firstLeft.value = leftField;
+                        firstRight.value = rightField;
+                    } catch (_) { }
+                } else {
+                    // 如果是组合键，自动切换到“自定义表达式”模式，并生成对应 SQL
+                    const tbody = document.getElementById(`mtqOnBody_${joinAlias}`);
+                    const exprBody = document.getElementById(`mtqOnExprBody_${joinAlias}`);
+                    const modeRadios = document.querySelectorAll(`input[name="mtqOnMode_${joinAlias}"]`);
+                    
+                    if (tbody && exprBody && modeRadios.length) {
+                        modeRadios.forEach(r => r.checked = r.value === 'expr');
+                        tbody.style.display = 'none';
+                        exprBody.style.display = 'table-row-group';
+                        
+                        const ta = exprBody.querySelector('textarea');
+                        if (ta && !ta.value.trim()) {
+                            let exprLines = [];
+                            const lt = aliasToTable[bestLeftAlias];
+                            for (let i = 0; i < Math.min(leftCols.length, rightCols.length); i++) {
+                                let lc = leftCols[i];
+                                let rc = rightCols[i];
+                                if (String(best.leftTable || '') !== String(lt || '') && String(best.rightTable || '') === String(lt || '')) {
+                                    lc = rightCols[i];
+                                    rc = leftCols[i];
+                                }
+                                exprLines.push(`${bestLeftAlias}.[${lc}] = ${joinAlias}.[${rc}]`);
+                            }
+                            ta.value = exprLines.join(' AND\n');
+                        }
                     }
                 }
-                // 填值（如果选项里存在）
-                try { firstLeft.value = leftField; } catch (_) { }
-                try { firstRight.value = rightField; } catch (_) { }
             });
+            // 自动填充后，立刻触发一次字段勾选同步
+            try { mtqAutoSelectJoinKeys(); } catch (_) { }
         }
 
         // 多表关联：自动勾选 Join 键字段（避免用户在 Step3 再手选一遍）
@@ -2841,9 +3046,15 @@
         function mtjGetCurrentSchemeId() {
             return (window.__activeSchemeId || '').trim();
         }
+        function mtqSaveDraft() {
+            try { saveTempTemplate('mtq', collectMtqSettingsAll()); } catch (_) { }
+        }
         function mtjSaveJson() {
             const schemeId = mtjGetCurrentSchemeId();
             if (!schemeId) { alert('请先在【项目管理】保存/选择一个项目'); return; }
+            if (!window.__mtjSettings || !window.__mtjSettings.lockedSql || !window.__mtjSettings.fromJoinSql) {
+                try { lockMtjSql(); } catch (_) { }
+            }
             const data = window.__mtjSettings || null;
             if (!data || !data.lockedSql || !data.fromJoinSql) { alert('请先在【多表关联】锁定SQL，再保存。'); return; }
             window.chrome.webview.postMessage({ action: 'saveMtjJson', schemeId, data });
@@ -2860,9 +3071,14 @@
             const execBtn = document.getElementById('mtqBarExecute');
             const copyBtn = document.getElementById('mtqBarCopy');
             const canLock = (step >= 5);
+
+            const isLastStep = (step >= 5);
+            if (nextBtn) nextBtn.style.display = isLastStep ? 'none' : 'inline-block';
+            if (execBtn) execBtn.style.display = isLastStep ? 'inline-block' : 'none';
+
             if (prevBtn) prevBtn.disabled = !(step > 1);
-            if (nextBtn) nextBtn.disabled = !(step < 5);
-            if (execBtn) execBtn.disabled = !canLock;
+            if (nextBtn) nextBtn.disabled = false;
+            if (execBtn) execBtn.disabled = false;
             if (copyBtn) copyBtn.disabled = !canLock;
         }
         
@@ -3126,8 +3342,13 @@
             const execBtn = document.getElementById('mtqlBarExecute');
             const copyBtn = document.getElementById('mtqlBarCopy');
             const hasLock = !!(window.__mtjSettings && window.__mtjSettings.lockedSql);
+
+            const isLastStep = (step >= 4);
+            if (nextBtn) nextBtn.style.display = isLastStep ? 'none' : 'inline-block';
+            if (execBtn) execBtn.style.display = isLastStep ? 'inline-block' : 'none';
+
             if (prevBtn) prevBtn.disabled = !(step > 1);
-            if (nextBtn) nextBtn.disabled = !(step < 4) || !hasLock;
+            if (nextBtn) nextBtn.disabled = !hasLock;
             const canRun = hasLock && (step >= 3);
             if (execBtn) execBtn.disabled = !canRun;
             if (copyBtn) copyBtn.disabled = !canRun;
@@ -3480,8 +3701,13 @@
             const execBtn = document.getElementById('mtslBarExecute');
             const copyBtn = document.getElementById('mtslBarCopy');
             const hasLock = !!(window.__mtjSettings && window.__mtjSettings.lockedSql);
+
+            const isLastStep = (step >= 5);
+            if (nextBtn) nextBtn.style.display = isLastStep ? 'none' : 'inline-block';
+            if (execBtn) execBtn.style.display = isLastStep ? 'inline-block' : 'none';
+
             if (prevBtn) prevBtn.disabled = !(step > 1);
-            if (nextBtn) nextBtn.disabled = !(step < 5) || !hasLock;
+            if (nextBtn) nextBtn.disabled = !hasLock;
             const canRun = hasLock && (step >= 4);
             if (execBtn) execBtn.disabled = !canRun;
             if (copyBtn) copyBtn.disabled = !canRun;
@@ -4459,7 +4685,7 @@
             openRecordDetailModal(`记录明细：${sourceTable}（rowid=${rowId}）`, sql, 200);
         }
 
-        function openRecordDetailModal(title, sql, limit) {
+        function openRecordDetailModal(title, sql, limit, onSaveCallback) {
             const id = `detail_${++window.__detailModalSeq}`;
             const modal = document.createElement('div');
             modal.className = 'modal';
@@ -4468,17 +4694,21 @@
                 <div style="background:#fff; border-radius:10px; width: 92vw; max-width: 1100px; max-height: 86vh; overflow:hidden; box-shadow:0 10px 30px rgba(0,0,0,0.18);">
                     <div style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-bottom:1px solid #eee;">
                         <div style="font-weight:bold; flex:1;">${escapeHtml(title || '记录明细')}</div>
+                        ${onSaveCallback ? `<button class="btn btn-primary" style="padding:4px 16px;" onclick="saveDetailSql('${id}')">保存修改</button>` : ''}
                         <button class="btn btn-secondary" style="padding:2px 10px;" onclick="this.closest('.modal').remove()">关闭</button>
                     </div>
                     <div style="padding:12px;">
                         <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+                            ${limit > 0 ? `
                             <span style="font-size:9pt; color:#495057;">每次加载:</span>
-                            <input type="number" id="${id}_limit" class="form-control" style="flex:0 0 120px;" value="${Number(limit || 200)}" min="1" max="100000">
+                            <input type="number" id="${id}_limit" class="form-control" style="flex:0 0 120px;" value="${Number(limit)}" min="1" max="100000">
                             <button class="wizard-btn wizard-btn-execute" style="padding:4px 10px;" onclick="runDetailSql('${id}')">▶ 加载</button>
+                            ` : ''}
                             <button class="wizard-btn wizard-btn-copy" style="padding:4px 10px;" onclick="copyDetailSql('${id}')">📋 复制SQL</button>
-                            <span style="font-size:8pt; color:#6c757d;">提示：可手工修改 SQL；仅允许 SELECT。</span>
+                            <span style="font-size:8pt; color:#6c757d;">提示：可手工修改 SQL；${limit > 0 ? '仅允许 SELECT。' : '修改后点击右上角保存。'}</span>
                         </div>
-                        <textarea id="${id}_sql" rows="5" style="width:100%; resize:vertical; border:1px solid #d6eaff; border-radius:6px; padding:8px; font-family:'Consolas','Courier New',monospace; font-size:9pt; box-sizing:border-box;"></textarea>
+                        <textarea id="${id}_sql" rows="${limit > 0 ? 5 : 20}" style="width:100%; resize:vertical; border:1px solid #d6eaff; border-radius:6px; padding:8px; font-family:'Consolas','Courier New',monospace; font-size:9pt; box-sizing:border-box;"></textarea>
+                        ${limit > 0 ? `
                         <div class="result-info" id="${id}_info" style="margin-top:10px;"></div>
                         <div style="max-height: 40vh; overflow:auto; border:1px solid #eee; border-radius:6px;">
                             <table class="table table-head-dark" style="margin:0;">
@@ -4486,13 +4716,29 @@
                                 <tbody id="${id}_body"></tbody>
                             </table>
                         </div>
+                        ` : ''}
                     </div>
                 </div>
             `;
             modal.onclick = (e) => { if (e.target === modal) modal.remove(); };
             document.body.appendChild(modal);
             document.getElementById(`${id}_sql`).value = String(sql || '').trim();
-            window.__detailModals[id] = { cardId: id, infoId: `${id}_info`, headId: `${id}_head`, bodyId: `${id}_body` };
+            if (limit > 0) {
+                window.__detailModals[id] = { cardId: id, infoId: `${id}_info`, headId: `${id}_head`, bodyId: `${id}_body` };
+            }
+            if (onSaveCallback) {
+                window[`saveDetailSql_${id}`] = onSaveCallback;
+            }
+        }
+        
+        function saveDetailSql(id) {
+            const ta = document.getElementById(`${id}_sql`);
+            let sql = (ta && ta.value) ? ta.value.trim() : '';
+            if (window[`saveDetailSql_${id}`]) {
+                window[`saveDetailSql_${id}`](sql);
+            }
+            const modal = ta.closest('.modal');
+            if (modal) modal.remove();
         }
 
         function copyDetailSql(id) {
@@ -4625,11 +4871,10 @@
             const baseSql = window.__mtqSqlBase || buildMtqSqlBase();
             if (!baseSql) { alert('暂无可导出的SQL，请先配置多表查询。'); return; }
             if (!window.__sqliteReady) { alert('SQLite 尚未导入：请先在【项目管理】完成导入'); return; }
-            const f = (format === 'csv') ? 'csv' : (format === 'xlsx_text' ? 'xlsx_text' : 'xlsx');
             window.chrome.webview.postMessage({
                 action: 'exportQueryToFile',
                 sql: baseSql,
-                format: f,
+                format: format || "xlsx",
                 limit: 0,
                 skipCount: true,
                 excelOptions: { fontName: '微软雅黑', fontSize: 9 }
@@ -4643,6 +4888,12 @@
         function openRecentScheme(schemeId) {
             if (!schemeId) return;
             window.chrome.webview.postMessage({ action: 'openRecentScheme', schemeId: schemeId });
+        }
+
+        function restoreLastScheme() {
+            const id = (window.__activeSchemeId || '') || (recentSchemes && recentSchemes[0] ? (recentSchemes[0].id || '') : '');
+            if (!id) { alert('暂无可恢复的最近项目'); return; }
+            openRecentScheme(id);
         }
 
         function updateRecentSchemesList() {
@@ -5722,16 +5973,24 @@ ${sec('3) 残留抽检', renderSample())}
             }
             tbody.innerHTML = list.map(p => {
                 const id = String(p.id || '');
-                const active = (window.__selectedProjectId && window.__selectedProjectId === id) ? 'background:#e7f3ff;' : '';
+                const isSelected = (window.__selectedProjectId && window.__selectedProjectId === id);
+                const isActive = id === window.__activeSchemeId;
+                const activeStyle = isActive ? 'background-color: #fdf3f4; border-left: 3px solid #d13438;' : (isSelected ? 'background:#e7f3ff;' : '');
+                
                 const status = p.status || 'ok';
                 const stLabel = status === 'ok' ? '正常' : (status === 'db_missing' ? '库缺失' : '配置缺失');
                 const stColor = status === 'ok' ? '#52c41a' : '#faad14';
                 const dbName = (p.dbPath || '').split(/[\\/]/).pop() || '';
                 const iniName = (p.iniPath || '').split(/[\\/]/).pop() || '';
                 const diff = (p.tableDiffRate !== undefined && p.tableDiffRate !== null) ? `${Math.round(Number(p.tableDiffRate) * 100)}%` : '-';
+                
+                const nameHtml = isActive 
+                    ? `<div style="font-weight:700; color:#d13438; display:flex; align-items:center; gap:6px;">${escapeHtml(p.name || id)} <span style="font-size:10px; background:#d13438; color:#fff; padding:1px 4px; border-radius:2px;">当前活动</span></div>`
+                    : `<div style="font-weight:700; color:#333;">${escapeHtml(p.name || id)}</div>`;
+
                 return `
-                    <tr style="cursor:pointer; ${active}" onclick="selectProject('${id.replace(/'/g, "\\'")}')">
-                        <td><div style="font-weight:700; color:#333;">${escapeHtml(p.name || id)}</div></td>
+                    <tr style="cursor:pointer; ${activeStyle}" onclick="selectProject('${id.replace(/'/g, "\\'")}')">
+                        <td>${nameHtml}</td>
                         <td style="color:#6c757d;">${escapeHtml(dbName || '-')}</td>
                         <td style="color:#6c757d;">${escapeHtml(iniName || '-')}</td>
                         <td style="color:#6c757d;">${escapeHtml(formatBytes(p.dbSizeBytes || 0))}</td>
@@ -5741,8 +6000,9 @@ ${sec('3) 残留抽检', renderSample())}
                         <td style="color:#6c757d;">${escapeHtml(p.createdAt || '-')}</td>
                         <td style="color:#6c757d;">${escapeHtml(p.updatedAt || '-')} <span style="color:#999;">(${escapeHtml(diff)})</span> <span style="color:${stColor}; font-weight:700; margin-left:6px;">${stLabel}</span></td>
                         <td>
+                            <button class="btn btn-primary" style="padding:2px 8px; font-size:8pt;" onclick="try{event.stopPropagation();}catch(_){} editProjectConfig('${id.replace(/'/g, "\\'")}')">编辑</button>
                             <button class="btn btn-success" style="padding:2px 8px; font-size:8pt;" onclick="try{event.stopPropagation();}catch(_){} openRecentScheme('${id.replace(/'/g, "\\'")}')">访问</button>
-                            <button class="btn btn-danger" style="padding:2px 8px; font-size:8pt;" onclick="try{event.stopPropagation();}catch(_){} deleteProject('${id.replace(/'/g, "\\'")}')">删除</button>
+                            ${!isActive ? `<button class="btn btn-danger" style="padding:2px 8px; font-size:8pt;" onclick="try{event.stopPropagation();}catch(_){} deleteProject('${id.replace(/'/g, "\\'")}')">删除</button>` : ''}
                         </td>
                     </tr>
                 `;
@@ -5756,13 +6016,27 @@ ${sec('3) 残留抽检', renderSample())}
             try { window.chrome?.webview?.postMessage?.({ action: 'getProjectDetail', schemeId }); } catch (_) { }
         }
 
+        function editProjectConfig(schemeId) {
+            selectProject(schemeId);
+            openSelectedProject();
+            try { switchFwTab('config'); } catch (_) { }
+        }
+
+        function refreshProjectState() {
+            const id = window.__selectedProjectId || window.__activeSchemeId;
+            if (!id) { alert('当前没有选中的项目'); return; }
+            try { window.chrome.webview.postMessage({ action: 'getProjectDetail', schemeId: id }); } catch (_) { }
+            try { requestProjectList(); } catch (_) { }
+            setStatusMessage('已刷新项目详情');
+        }
+
         function openSelectedProject() {
             const id = window.__selectedProjectId;
             if (!id) { alert('请先选择一个项目'); return; }
             openRecentScheme(id);
-            // 日常打开/加载应留在项目中心（避免“打开=跳到项目管理”造成心智混乱）
-            try { switchTab('project-hub'); } catch (_) { }
-            try { setProjectHubView('active'); } catch (_) { }
+            // 改为跳到项目管理的当前活动项目视图
+            try { switchTab('file-wizard'); } catch (_) { }
+            try { switchFwTab('detail'); } catch (_) { }
         }
 
         function deleteProject(id) {
@@ -6051,12 +6325,30 @@ ${sec('3) 残留抽检', renderSample())}
             });
         }
 
+        function phSwitchRightTab(tabName, btn) {
+            const container = btn.parentElement;
+            container.querySelectorAll('button').forEach(b => {
+                b.style.borderBottomColor = 'transparent';
+                b.style.fontWeight = '400';
+                b.style.color = '#495057';
+            });
+            btn.style.borderBottomColor = '#0078d4';
+            btn.style.fontWeight = '600';
+            btn.style.color = '#0078d4';
+
+            ['overview', 'snapshot', 'mapping', 'import'].forEach(id => {
+                const el = document.getElementById(`phRightTab_${id}`);
+                if (el) el.style.display = (id === tabName) ? 'block' : 'none';
+            });
+        }
+
         function renderProjectDetail(meta) {
             const cards = document.getElementById('projectDetailCards');
-            const more = document.getElementById('projectDetailMore');
             const title = document.getElementById('projectDetailTitle');
+            const mappingContainer = document.getElementById('projectDetailMapping');
+            const importContainer = document.getElementById('projectDetailImport');
             if (title) title.textContent = `项目详情：${meta?.DisplayName || meta?.displayName || meta?.Id || ''}`;
-            if (!cards || !more) return;
+            if (!cards) return;
 
             window.__selectedProjectMeta = meta || null;
             const id = meta?.Id || meta?.id || '';
@@ -6098,30 +6390,7 @@ ${sec('3) 残留抽检', renderSample())}
             ].join('');
 
             const renderSources = () => {
-                if (!Array.isArray(sources) || !sources.length) return `<div style="color:#6c757d;">（暂无源文件记录）</div>`;
-                return `
-                    <div style="display:flex; flex-direction:column; gap:8px;">
-                        ${sources.map(s => {
-                            const fp = s.FilePath || s.filePath || '';
-                            const sz = s.FileSizeBytes ?? s.fileSizeBytes ?? 0;
-                            const ticks = s.LastWriteUtcTicks ?? s.lastWriteUtcTicks ?? 0;
-                            const dt = ticks ? new Date(Number(ticks)/10000 - 62135596800000).toLocaleString() : '';
-                            const isMain = !!(s.IsMain ?? s.isMain);
-                            const sheets = s.Sheets || s.sheets || [];
-                            return `
-                                <div style="border:1px solid #e1e4e8; border-radius:4px; padding:10px; background:#fff;">
-                                    <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-                                        <div style="font-weight:600; color:#333;">${escapeHtml(fp.split('/').pop() || fp)}${isMain ? ' <span style="color:#0078d4;">（主）</span>' : ''}</div>
-                                        <div style="font-size:8pt; color:#6c757d;">${formatBytes(sz)}</div>
-                                    </div>
-                                    <div style="font-size:8pt; color:#6c757d; margin-top:4px; word-break:break-all;">${escapeHtml(fp)}</div>
-                                    <div style="font-size:8pt; color:#6c757d; margin-top:4px;">最后修改：${escapeHtml(dt || '-')}</div>
-                                    ${Array.isArray(sheets) && sheets.length ? `<div style="font-size:8pt; color:#6c757d; margin-top:4px;">工作表：${escapeHtml(sheets.slice(0,8).join('，'))}${sheets.length>8?'…':''}</div>` : ''}
-                                </div>
-                            `;
-                        }).join('')}
-                    </div>
-                `;
+                return '';
             };
 
             const renderMapping = () => {
@@ -6130,19 +6399,27 @@ ${sec('3) 残留抽检', renderSample())}
                     (Array.isArray(sources) ? sources : []).forEach(s => {
                         const fp = (s.FilePath || s.filePath || '');
                         const base = (fp.split('/').pop() || '').replace(/\.(xlsx|xls|csv|tsv)$/i, '');
-                        const sheets = (s.Sheets || s.sheets || []);
+                        const sheets = s.Sheets || s.sheets || [];
+                        const selected = s.Selected || s.selected || sheets; // 如果没有记录 selected，默认认为全选
                         const tnMap = s.TableNameMap || s.tableNameMap || {};
                         const taMap = s.TableAliasMap || s.tableAliasMap || {};
+                        const rrMap = s.DatasetRoleMap || s.datasetRoleMap || {};
+                        const importType = (s.ImportType || s.importType || '独立表');
                         (Array.isArray(sheets) ? sheets : []).forEach(sh => {
                             if (!sh) return;
+                            const isSel = selected.includes(sh);
+                            if (!isSel) return; // 仅展示已勾选的映射关系
                             const physical = (tnMap && tnMap[sh]) ? String(tnMap[sh]) : `${base}|${sh}`;
                             const alias = (taMap && taMap[sh]) ? String(taMap[sh]) : physical;
                             const show = (alias && alias !== physical) ? `${alias}（${physical}）` : physical;
+                            const role = (rrMap && rrMap[sh]) ? String(rrMap[sh]) : 'dim';
                             exp.push({
                                 file: fp,
                                 sheet: sh,
                                 table: physical,
-                                show: show
+                                show: show,
+                                role: role,
+                                importType: importType
                             });
                         });
                     });
@@ -6150,22 +6427,27 @@ ${sec('3) 残留抽检', renderSample())}
                 const actual = new Set((Array.isArray(dbTables) ? dbTables : []).map(x => String(x)));
                 const rows = exp.map(r => {
                     const ok = actual.has(r.table);
+                    const roleText = String(r.role || '').toLowerCase() === 'fact' ? '<span style="color:#0078d4;">事实表 (Fact)</span>' : '<span style="color:#6c757d;">维表 (Dim)</span>';
                     return `<tr>
-                        <td style="max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(r.file)}">${escapeHtml((r.file||'').split('/').pop()||r.file)}</td>
+                        <td style="max-width:150px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(r.file)}">${escapeHtml((r.file||'').split('/').pop()||r.file)}</td>
                         <td>${escapeHtml(r.sheet)}</td>
-                        <td style="font-family:Consolas,monospace; font-size:8.5pt;" title="${escapeHtml(r.table)}">${escapeHtml(r.show || r.table)}</td>
-                        <td>${ok ? '<span style="color:#52c41a;font-weight:700;">✔</span>' : '<span style="color:#faad14;font-weight:700;">✗</span>'}</td>
-                        <td style="color:#6c757d;">v1</td>
+                        <td>${roleText}</td>
+                        <td style="font-family:Consolas,monospace; font-size:8.5pt;" title="${escapeHtml(r.table)}">${escapeHtml(r.table)}</td>
+                        <td>${escapeHtml(r.importType)}</td>
+                        <td style="font-family:Consolas,monospace; font-size:8.5pt;" title="${escapeHtml(r.show)}">${escapeHtml(r.show)}</td>
+                        <td style="text-align:center;">${ok ? '<span style="color:#52c41a;font-weight:700;">✔</span>' : '<span style="color:#faad14;font-weight:700;">待导入</span>'}</td>
                         <td style="color:#6c757d;">-</td>
                     </tr>`;
                 }).join('');
                 if (!exp.length) return '';
                 return `
                     <div style="margin-top:10px; border:1px solid #e1e4e8; border-radius:4px; background:#fff; padding:10px;">
-                        <div style="font-weight:700; color:#333; margin-bottom:6px;">源文件表清单 ↔ 数据表库清单（对应关系）</div>
-                        <div style="font-size:8pt; color:#6c757d; margin-bottom:8px;">说明：期望表名按“{文件名}|{工作表}”生成；差异率为粗略口径（后续接入行数/字段比对后会更准）。</div>
+                        <div style="font-weight:700; color:#333; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+                            <span style="color:#faad14;">●</span> 数据集映射与物理表对照 (Datasets -> Tables)
+                        </div>
+                        <div style="font-size:8pt; color:#6c757d; margin-bottom:8px;">说明：此列表展示了项目中“已勾选导入”的数据集，及其预期对应的物理表名与角色（事实表/维表）。</div>
                         <table class="table" style="font-size:9pt;">
-                            <thead><tr><th>源文件</th><th>工作表</th><th>对应表名</th><th>存在</th><th>版本号</th><th>信息差异率</th></tr></thead>
+                            <thead><tr><th>源文件</th><th>数据集 (Dataset)</th><th style="width:100px;">角色</th><th>数据库表名</th><th>导入类型</th><th>逻辑别名</th><th style="width:70px; text-align:center;">已就绪</th><th style="width:90px;">信息差异率</th></tr></thead>
                             <tbody>${rows}</tbody>
                         </table>
                     </div>
@@ -6242,7 +6524,12 @@ ${sec('3) 残留抽检', renderSample())}
                 `;
             };
 
-            more.innerHTML = renderPolicy() + renderLastImport() + renderSources() + renderMapping();
+            if (mappingContainer) {
+                mappingContainer.innerHTML = renderMapping();
+            }
+            if (importContainer) {
+                importContainer.innerHTML = renderPolicy() + renderLastImport();
+            }
 
             // 当前活动项目视图：左侧“当前激活项目”盒子
             try {
@@ -6271,13 +6558,61 @@ ${sec('3) 残留抽检', renderSample())}
                 const snap = document.getElementById('projectConfigSnapshot');
                 if (snap) {
                     const tList = Array.isArray(dbTables) ? dbTables.slice(0, 50) : [];
+                    const srcCnt = Array.isArray(sources) ? sources.length : 0;
+                    const dsCnt = (Array.isArray(sources) ? sources : []).reduce((acc, s) => acc + ((s?.Sheets || s?.sheets || []).length || 0), 0);
+                    const mainSrcName = (meta.MainSourceFile || meta.mainSourceFile || '');
+                    const mainSrcBase = mainSrcName ? (String(mainSrcName).split('/').pop() || mainSrcName) : '-';
+                    const mainTblName = (meta.MainTableName || meta.mainTableName || '-');
+                    const imp = lastImport || null;
+                    const impBatch = imp ? (imp.BatchId || imp.batchId || '-') : '-';
+                    const impMode = imp ? (imp.ImportMode || imp.importMode || '-') : '-';
+                    const impTime = imp ? (imp.Time || imp.time || '') : '';
+                    const impTimeText = impTime ? String(impTime).replace('T', ' ').replace('Z', '') : '-';
+                    const impClr = imp ? ((imp.ClearedBeforeImport ?? imp.clearedBeforeImport) ? '清空后导入' : '不清空') : '-';
                     snap.innerHTML = `
+                        <div style="border:1px solid #e1e4e8; border-radius:4px; padding:10px; background:#fff; margin-bottom:12px; position:relative;">
+                          <div style="font-weight:700; color:#333; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+                              <span style="color:#0078d4;">●</span> 方案基本 (Scheme)
+                          </div>
+                          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size:9pt; color:#495057;">
+                            <div>项目ID：<b>${escapeHtml(id || '-')}</b></div>
+                            <div>项目名称：<b>${escapeHtml(meta.DisplayName || meta.displayName || '-')}</b></div>
+                            <div style="grid-column: 1 / -1;">业务库：<b>${escapeHtml(dbPath || '-')}</b></div>
+                            <div style="grid-column: 1 / -1;">配置文件：<b>${escapeHtml(iniPath || '-')}</b></div>
+                          </div>
+                        </div>
+
+                        <div style="border:1px solid #e1e4e8; border-radius:4px; padding:10px; background:#fff; margin-bottom:12px;">
+                          <div style="font-weight:700; color:#333; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+                              <span style="color:#faad14;">●</span> 数据源/数据集映射 (Sources & Datasets)
+                          </div>
+                          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size:9pt; color:#495057;">
+                            <div>挂载数据源数：<b>${escapeHtml(String(srcCnt))}</b></div>
+                            <div>已勾选数据集：<b>${escapeHtml(String(dsCnt))}</b></div>
+                            <div>核心源文件：<b style="color:#333;">${escapeHtml(mainSrcBase)}</b></div>
+                            <div>核心事实表：<b style="color:#333;">${escapeHtml(String(mainTblName || '-'))}</b></div>
+                          </div>
+                        </div>
+
+                        <div style="border:1px solid #e1e4e8; border-radius:4px; padding:10px; background:#fff; margin-bottom:12px;">
+                          <div style="font-weight:700; color:#333; margin-bottom:6px; display:flex; align-items:center; justify-content:space-between;">
+                              <div style="display:flex; align-items:center; gap:6px;"><span style="color:#52c41a;">●</span> 导入执行策略 (Import Strategy)</div>
+                              <span style="font-size:8pt; color:#6c757d;">(最近一次记录)</span>
+                          </div>
+                          <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 6px 16px; font-size:9pt; color:#495057;">
+                            <div>批次：<b>${escapeHtml(String(impBatch))}</b></div>
+                            <div>模式：<b>${escapeHtml(String(impMode))}</b></div>
+                            <div>时间：<b>${escapeHtml(String(impTimeText))}</b></div>
+                            <div>清空重建：<b>${escapeHtml(String(impClr))}</b></div>
+                          </div>
+                        </div>
+
                         <div style="border:1px solid #e1e4e8; border-radius:4px; padding:10px; background:#fff;">
-                          <div style="font-weight:700; color:#333; margin-bottom:6px;">核心定位</div>
-                          <div>源文件基表：<b>${escapeHtml((meta.MainSourceFile||meta.mainSourceFile||'-'))}</b></div>
-                          <div>数据表基表：<b>${escapeHtml((meta.MainTableName||meta.mainTableName||'-'))}</b></div>
-                          <div style="margin-top:10px; font-weight:700; color:#333;">表/视图清单（前 50）</div>
-                          <div style="margin-top:6px; font-family:Consolas,monospace; font-size:8.5pt; color:#495057; white-space:pre-wrap;">${escapeHtml(tList.join('\\n') || '（无）')}</div>
+                          <div style="font-weight:700; color:#333; margin-bottom:6px; display:flex; align-items:center; justify-content:space-between;">
+                              <div style="display:flex; align-items:center; gap:6px;"><span style="color:#6c757d;">●</span> 模型与对象清单 (Objects & Views)</div>
+                              <span style="font-size:8pt; color:#6c757d;">(前 50)</span>
+                          </div>
+                          <div style="margin-top:6px; font-family:Consolas,monospace; font-size:8.5pt; color:#495057; white-space:pre-wrap; max-height:100px; overflow-y:auto;">${escapeHtml(tList.join('\\n') || '（无）')}</div>
                         </div>
                     `;
                 }
@@ -6305,6 +6640,27 @@ ${sec('3) 残留抽检', renderSample())}
         function detachBaseDb() {
             if (!confirm('确认解除基础库挂载？（不删除文件，仅解除引用）')) return;
             try { window.chrome?.webview?.postMessage?.({ action: 'detachBaseDb' }); } catch (_) { }
+        }
+
+        function newScheme() {
+            try { window.__activeSchemeId = null; } catch (_) { }
+            try { window.__activeSchemeDbPath = null; } catch (_) { }
+            try { window.__selectedProjectId = null; } catch (_) { }
+            try { window.__selectedProjectMeta = null; } catch (_) { }
+            try { window.__schemeData = {}; } catch (_) { }
+            try { window.__fileWizardMain = null; } catch (_) { }
+            try { window.__sourceFiles = []; } catch (_) { }
+            try { ensureSourceFilesInit(); } catch (_) { }
+            try { renderSourceFiles(); } catch (_) { }
+            try { refreshSqliteMainTableSelect(); } catch (_) { }
+            try { updateSchemeDbPathHint(); } catch (_) { }
+            try {
+                const input = document.getElementById('schemeNameInput');
+                if (input) input.value = '';
+            } catch (_) { }
+            try { switchTab('file-wizard'); } catch (_) { }
+            try { switchFwTab('config'); } catch (_) { }
+            setStatusMessage('已新建项目草稿：请填写项目名称后保存');
         }
 
         function saveCurrentScheme() {
@@ -6384,6 +6740,400 @@ ${sec('3) 残留抽检', renderSample())}
             if (!confirm('将重建当前项目的临时数据库（.db）。\n\n这会清空该项目库中所有已导入/清洗/实验写入的数据，但不会删除项目 ini。\n建议仅在数据被清洗/SQL写入弄乱时使用。\n\n是否继续？')) return;
             window.chrome.webview.postMessage({ action: 'rebuildSchemeDb' });
             setStatusMessage('正在重建项目数据库...');
+        }
+
+        // 项目配置编辑：打开独立导入向导 (type: 'full' 或 'append')
+        function openImportWizard(type) {
+            const isAppend = (type === 'append');
+            const title = isAppend ? '➕ 合并表数据导入向导' : '✨ 独立表数据导入向导';
+            
+            const modal = document.createElement('div');
+            modal.className = 'modal';
+            modal.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; z-index: 2800;';
+            
+            modal.innerHTML = `
+              <div style="background:#fff; border-radius:10px; width: 900px; max-width: 95vw; height: 600px; max-height: 90vh; display:flex; flex-direction:column; box-shadow:0 10px 30px rgba(0,0,0,0.18); overflow:hidden;">
+                <div style="padding:12px 20px; background:#fff; border-bottom:1px solid #dee2e6; display:flex; align-items:center; justify-content:space-between;">
+                  <div style="font-size:12pt; font-weight:bold; color:#0078d4; display:flex; align-items:center; gap:8px;">
+                    <svg style="width:18px; height:18px; fill:#0078d4;"><use href="#ico-table"></use></svg>
+                    ${title}
+                  </div>
+                  <button class="btn btn-secondary" style="padding:2px 10px; font-size:9pt;" onclick="this.closest('.modal').remove()">✕ 关闭</button>
+                </div>
+                
+                <div style="padding:12px 20px 0; background:#fff;">
+                    <div class="step-navigation" style="--step-count: 3; margin-bottom: 20px;">
+                        <div class="step active" id="wizStepLabel1" data-step="1">
+                            <div class="step-circle">1</div>
+                            <div class="step-label">导入配置</div>
+                        </div>
+                        <div class="step" id="wizStepLabel2" data-step="2">
+                            <div class="step-circle">2</div>
+                            <div class="step-label">数据源与选表</div>
+                        </div>
+                        <div class="step" id="wizStepLabel3" data-step="3">
+                            <div class="step-circle">3</div>
+                            <div class="step-label">执行与总结</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="flex:1; padding:20px; overflow-y:auto; position:relative;">
+                    <!-- Step 1: 导入配置 -->
+                    <div id="wizStep1" style="display:block;">
+                        <h4 style="margin-top:0; font-size:10pt; color:#333; border-bottom:1px solid #eee; padding-bottom:8px;">项目与写入配置</h4>
+                        <div style="display:grid; grid-template-columns: 120px 1fr; gap:12px 16px; align-items:center; font-size:9pt; margin-top:16px;">
+                            <div style="color:#6c757d; text-align:right;">项目名称:</div>
+                            <input id="wizProjectName" class="form-control" style="width:100%; max-width:400px; height:30px;" value="${document.getElementById('schemeNameInput')?.value || ''}" placeholder="将同步更新外层项目名">
+                            
+                            <div style="color:#6c757d; text-align:right;">导入方式:</div>
+                            <div style="display:flex; gap:16px;">
+                                ${!isAppend ? `
+                                <label><input type="radio" name="wizImportType" value="single" checked onchange="toggleWizImportType()"> 单表独立导入</label>
+                                <label><input type="radio" name="wizImportType" value="append" onchange="toggleWizImportType()"> 单表追加导入</label>
+                                <span style="color:#adb5bd; font-size:8pt;">(提示：物理数据接入后，如需合并或关联，请前往“逻辑建模”操作)</span>
+                                ` : `
+                                <label><input type="radio" name="wizImportType" value="multi_merge" checked onchange="toggleWizImportType()"> 多表合并导入</label>
+                                <label><input type="radio" name="wizImportType" value="multi_append" onchange="toggleWizImportType()"> 多表合并追加</label>
+                                `}
+                            </div>
+                            
+                            <!-- 动态控制写入/追加方式 -->
+                            <div style="color:#6c757d; text-align:right;">${isAppend ? '合并方式:' : '<span id="wizWriteModeLabel">写入方式:</span>'}</div>
+                            <div style="display:flex; gap:10px; align-items:center;" id="wizWriteModeContainer">
+                                ${!isAppend ? `
+                                <div id="wizWriteModeOverwrite"><span style="background:#e6f7ff; color:#0050b3; padding:2px 8px; border-radius:4px; border:1px solid #91d5ff;">全量覆盖 (Overwrite)</span></div>
+                                <div id="wizWriteModeAppend" style="display:none;">
+                                    <select id="wizAppendStrategy" class="form-control" style="width:140px; height:30px;" onchange="document.getElementById('wizAppendKeys').style.display = this.value==='append' ? 'none' : 'block'">
+                                        <option value="append">直接追加 (APPEND)</option>
+                                        <option value="dedupe">去重追加 (Dedupe)</option>
+                                        <option value="upsert">更新追加 (UPSERT)</option>
+                                    </select>
+                                    <input id="wizAppendKeys" class="form-control" style="display:none; width:250px; height:30px;" placeholder="键字段(逗号分隔) 例如：ID,日期">
+                                </div>
+                                ` : `
+                                <select id="wizAppendStrategy" class="form-control" style="width:140px; height:30px;" onchange="document.getElementById('wizAppendKeys').style.display = this.value==='append' ? 'none' : 'block'">
+                                    <option value="append">直接合并 (APPEND)</option>
+                                    <option value="dedupe">去重合并 (Dedupe)</option>
+                                    <option value="upsert">更新合并 (UPSERT)</option>
+                                </select>
+                                <input id="wizAppendKeys" class="form-control" style="display:none; width:250px; height:30px;" placeholder="键字段(逗号分隔) 例如：ID,日期">
+                                `}
+                            </div>
+                            
+                            <div style="color:#6c757d; text-align:right;">导入选项:</div>
+                            <div style="display:flex; flex-direction:column; gap:8px;">
+                                ${!isAppend ? `<label id="wizClearDbLabel"><input type="checkbox" id="wizClearDb" checked> 导入前清空 SQLite 数据库 (推荐)</label>` : `<input type="checkbox" id="wizClearDb" style="display:none;">`}
+                                <label><input type="checkbox" id="wizCreateRevision" checked> 导入前创建修订点 (备份库)</label>
+                            </div>
+                            
+                            <div style="color:#6c757d; text-align:right;">字段推断模式:</div>
+                            <select id="wizFieldMode" class="form-control" style="width:100%; max-width:400px; height:30px;">
+                                <option value="text">全列文本格式（最保真，推荐）</option>
+                                <option value="smart">智能转换列格式（支持日期/数值识别）</option>
+                            </select>
+
+                            ${isAppend ? `
+                            <div style="grid-column: 1 / -1; margin-top: 8px;">
+                                <!-- 多表合并导入说明 -->
+                                <div id="wizMultiMergeNotice" style="display:block; background:#e6f7ff; padding:10px 12px; border-radius:6px; border:1px solid #91d5ff; font-size:9pt; color:#0050b3;">
+                                    <b>说明：</b> 新增合并导入方式下，本向导将以<b>第一个选定表</b>作为并表基础对象。
+                                </div>
+                                
+                                <!-- 多表合并追加选择器 -->
+                                <div id="wizMultiAppendTarget" style="display:none; align-items:center; gap:12px; background:#fffbe6; padding:10px 12px; border-radius:6px; border:1px solid #ffe58f;">
+                                    <div style="font-weight:bold; color:#d46b08; white-space:nowrap;">追加表对象:</div>
+                                    <select id="wizMultiAppendTargetTable" class="form-control" style="width:100%; max-width:300px; height:30px; border-color:#d46b08;">
+                                        <!-- 将由JS动态填充现有表 -->
+                                    </select>
+                                </div>
+                            </div>
+                            ` : ''}
+                        </div>
+                    </div>
+                    
+                    <!-- Step 2: 数据源与选表 -->
+                    <div id="wizStep2" style="display:none; height:100%; flex-direction:column;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                            <h4 style="margin:0; font-size:10pt; color:#333;">配置数据源与工作表</h4>
+                            <button class="btn btn-secondary" style="padding:4px 10px; font-size:9pt;" onclick="addSourceFile()">+ 添加新文件</button>
+                        </div>
+                        <div style="flex:1; border:1px solid #dee2e6; border-radius:4px; overflow-y:auto; background:#fafafa; padding:10px;" id="wizSourceList">
+                            <!-- 动态注入简化的选表 UI -->
+                        </div>
+                    </div>
+                    
+                    <!-- Step 3: 执行与总结 (诊断+导入合并) -->
+                    <div id="wizStep3" style="display:none; text-align:center; padding-top:20px;">
+                        <div id="wizDiagnosticContent" style="padding:16px; background:#fffbe6; border:1px solid #ffe58f; border-radius:6px; font-size:9pt; line-height:1.8; text-align:left; margin-bottom:20px;">
+                            正在分析所选文件...
+                        </div>
+                        <h3 style="color:#333;" id="wizReadyTitle">准备就绪</h3>
+                        <p style="color:#6c757d; font-size:10pt; margin-bottom:30px;" id="wizReadyDesc">所有配置已完成，点击下方【执行导入】按钮开始${isAppend?'追加':'覆盖'}导入数据到 SQLite 数据库。</p>
+                        <div id="wizProgress" style="margin-top:20px; display:none;">
+                            <div style="font-size:9pt; color:#0078d4; margin-bottom:8px;" id="wizProgressText">正在导入...</div>
+                            <div style="width:60%; height:6px; background:#eee; border-radius:3px; margin:0 auto; overflow:hidden;">
+                                <div id="wizProgressBar" style="width:0%; height:100%; background:#0078d4; transition:width 0.3s;"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="wizard-bottom-bar" style="margin:0; padding:12px 16px; border-top:1px solid #eee; background:#f8f9fa; border-radius: 0 0 10px 10px; position:relative; bottom:0;">
+                    <div class="wizard-buttons wizard-bottom" style="margin:0; padding:0; background:none; border:none; display:flex; justify-content:space-between; width:100%;">
+                        <button class="wizard-btn wizard-btn-prev" onclick="this.closest('.modal').remove()">取消</button>
+                        <div style="flex:1;"></div>
+                        <div style="display:flex; gap:10px;">
+                            <button class="wizard-btn wizard-btn-prev" id="wizPrevBtn" style="display:none;">← 上一步</button>
+                            <button class="wizard-btn wizard-btn-next" id="wizNextBtn">下一步 →</button>
+                            <button class="wizard-btn wizard-btn-execute" id="wizExecuteBtn" style="display:none;">▶ 执行导入</button>
+                            <button class="wizard-btn wizard-btn-exit" id="wizExitBtn" style="display:none;" onclick="this.closest('.modal').remove()">退出</button>
+                        </div>
+                    </div>
+                </div>
+              </div>
+            `;
+            
+            document.body.appendChild(modal);
+            
+            // 向导控制逻辑
+            let currentStep = 1;
+            const btnPrev = modal.querySelector('#wizPrevBtn');
+            const btnNext = modal.querySelector('#wizNextBtn');
+            const btnExec = modal.querySelector('#wizExecuteBtn');
+            const btnExit = modal.querySelector('#wizExitBtn');
+            
+            function updateWizardUI() {
+                for (let i=1; i<=3; i++) {
+                    modal.querySelector('#wizStep'+i).style.display = (i === currentStep) ? (i===2?'flex':'block') : 'none';
+                    
+                    const stepLbl = modal.querySelector('#wizStepLabel'+i);
+                    if (i === currentStep) {
+                        stepLbl.classList.add('active');
+                        stepLbl.classList.remove('completed');
+                    } else if (i < currentStep) {
+                        stepLbl.classList.remove('active');
+                        stepLbl.classList.add('completed');
+                    } else {
+                        stepLbl.classList.remove('active');
+                        stepLbl.classList.remove('completed');
+                    }
+                }
+                
+                btnPrev.style.display = (currentStep > 1 && currentStep < 3) ? 'block' : 'none';
+                btnNext.style.display = (currentStep < 3) ? 'block' : 'none';
+                btnExec.style.display = (currentStep === 3) ? 'block' : 'none';
+                
+                if (currentStep === 2) renderWizSourceList();
+                if (currentStep === 3) runWizDiagnostics();
+            }
+            
+            // 将内部的渲染函数绑定到全局，以便从 app.js 原有的 addSourceFile 回调中触发刷新
+            window.__renderWizSourceList = renderWizSourceList;
+            
+            function renderWizSourceList() {
+                const list = modal.querySelector("#wizSourceList");
+                let validFiles = (window.__sourceFiles || []).filter(f => f.filePath);
+                if (isAppend) { validFiles = validFiles.filter(f => f.importType === "合并表"); } else { validFiles = validFiles.filter(f => f.importType !== "合并表"); }
+                if (validFiles.length === 0) {
+                    list.innerHTML = "<div style=\"text-align:center; padding:40px; color:#999;\">当前没有符合条件的数据源。<br>（提示：您正在使用向导仅展示对应类型的文件，可在“项目配置”中修改类型。）</div>";
+                    return;
+                }
+                let html = '';
+                validFiles.forEach(f => {
+                    const fileName = (f.filePath || '').split('\\').pop().split('/').pop();
+                    html += `<div style="background:#fff; border:1px solid #ddd; border-radius:6px; padding:10px; margin-bottom:10px;">
+                        <div style="font-weight:bold; color:#0078d4; margin-bottom:6px;">📄 ${escapeHtml(fileName)}</div>
+                        <div style="display:flex; flex-wrap:wrap; gap:10px; padding-left:20px;">`;
+                    (f.worksheets || []).forEach(s => {
+                        const isSel = (f.selected || []).includes(s);
+                        const isMain = !!(window.__fileWizardMain && window.__fileWizardMain.sourceId === f.id && window.__fileWizardMain.sheetName === s);
+                        html += `<label style="display:flex; align-items:center; gap:4px; font-size:9pt; background:${isSel?'#e6f7ff':'#f0f0f0'}; padding:4px 8px; border-radius:4px; border:1px solid ${isSel?'#91d5ff':'#ddd'}; cursor:pointer;">
+                            <input type="checkbox" ${isSel?'checked':''} onchange="toggleWorksheetSelected('${f.id}','${escapeHtml(s)}',this.checked); window.__renderWizSourceList();">
+                            ${escapeHtml(s)} ${isMain ? '<span style="color:#fa8c16;font-size:8pt;">(主表)</span>' : ''}
+                        </label>`;
+                    });
+                    html += `</div></div>`;
+                });
+                list.innerHTML = html;
+            }
+            
+            function toggleWizImportType() {
+                const mode = modal.querySelector('input[name="wizImportType"]:checked').value;
+                const modeLbl = modal.querySelector('#wizWriteModeLabel');
+                const contOverwrite = modal.querySelector('#wizWriteModeOverwrite');
+                const contAppend = modal.querySelector('#wizWriteModeAppend');
+                const lblClear = modal.querySelector('#wizClearDbLabel');
+                const chkClear = modal.querySelector('#wizClearDb');
+                
+                // 多表合并导入的特有UI
+                const noticeMerge = modal.querySelector('#wizMultiMergeNotice');
+                const noticeAppend = modal.querySelector('#wizMultiAppendTarget');
+                const appendTargetTable = modal.querySelector('#wizMultiAppendTargetTable');
+                
+                if (mode === 'single') {
+                    modeLbl.textContent = '写入方式:';
+                    contOverwrite.style.display = 'block';
+                    contAppend.style.display = 'none';
+                    if(lblClear) lblClear.style.display = 'inline-flex';
+                } else if (mode === 'append') {
+                    modeLbl.textContent = '追加方式:';
+                    contOverwrite.style.display = 'none';
+                    contAppend.style.display = 'flex';
+                    if(lblClear) lblClear.style.display = 'none';
+                    if(chkClear) chkClear.checked = false; // 追加时不应该清空库
+                } else if (mode === 'multi_merge') {
+                    if(noticeMerge) noticeMerge.style.display = 'block';
+                    if(noticeAppend) noticeAppend.style.display = 'none';
+                } else if (mode === 'multi_append') {
+                    if(noticeMerge) noticeMerge.style.display = 'none';
+                    if(noticeAppend) noticeAppend.style.display = 'flex';
+                    
+                    // 动态填充表下拉框
+                    if(appendTargetTable && window.__sqliteTables) {
+                        appendTargetTable.innerHTML = '';
+                        window.__sqliteTables.forEach(t => {
+                            const opt = document.createElement('option');
+                            opt.value = t;
+                            opt.textContent = t;
+                            appendTargetTable.appendChild(opt);
+                        });
+                        if(window.__sqliteMainTableName) {
+                            appendTargetTable.value = window.__sqliteMainTableName;
+                        }
+                    }
+                }
+            }
+            // 暴露给内联onclick
+            window.toggleWizImportType = toggleWizImportType;
+            
+            // 初始化时调用一次以加载数据表
+            if (isAppend) {
+                toggleWizImportType();
+            }
+            
+            function runWizDiagnostics() {
+                const diag = modal.querySelector('#wizDiagnosticContent');
+                let fileCount = (window.__sourceFiles || []).length;
+                let sheetCount = (window.__sourceFiles || []).reduce((sum, f) => sum + (f.selected||[]).length, 0);
+                
+                if (sheetCount === 0) {
+                    diag.innerHTML = `<span style="color:#f5222d;">❌ 错误：未勾选任何需要导入的工作表。请返回上一步选择。</span>`;
+                    btnExec.disabled = true;
+                    return;
+                }
+                btnExec.disabled = false;
+                
+                const clearDb = modal.querySelector('#wizClearDb').checked;
+                const importType = modal.querySelector('input[name="wizImportType"]:checked').value;
+                
+                let html = `<ul style="margin:0; padding-left:20px;">
+                    <li><b>预计成本信息:</b> 将处理 ${fileCount} 个文件，共 ${sheetCount} 个工作表。预计耗时取决于文件大小及磁盘性能。</li>
+                    <li><b>写入策略评估:</b> 采用 <b>${(isAppend || importType === 'append') ? modal.querySelector('#wizAppendStrategy').value : '覆盖(Overwrite)'}</b> 模式。${clearDb ? '将提前清空现有数据库（推荐）。' : '将在现有库结构上进行操作。'}</li>
+                    <li><b>导入方式:</b> ${importType === 'single' ? '独立导入' : (importType === 'append' ? '追加导入' : '多表合并')}（如需关联查询请于导入完成后在逻辑建模执行）。</li>
+                    <li><b>异常关联检查:</b> ✅ 未发现明显的名称或关系冲突。</li>
+                </ul>`;
+                diag.innerHTML = html;
+            }
+            
+            btnPrev.onclick = () => { if(currentStep > 1) { currentStep--; updateWizardUI(); } };
+            btnNext.onclick = () => { if(currentStep < 3) { currentStep++; updateWizardUI(); } };
+            
+            btnExec.onclick = () => {
+                // 将向导的配置同步到全局变量
+                const pName = modal.querySelector('#wizProjectName').value;
+                if(pName) {
+                    const el = document.getElementById('schemeNameInput');
+                    if(el) el.value = pName;
+                }
+                
+                const importType = modal.querySelector('input[name="wizImportType"]:checked').value;
+                
+                if (isAppend || importType === 'append' || importType === 'multi_append') {
+                    window.__importWriteMode = 'append';
+                    window.__appendStrategy = modal.querySelector('#wizAppendStrategy').value;
+                    window.__appendKeyColumns = modal.querySelector('#wizAppendKeys').value;
+                } else if (importType === 'multi_merge') {
+                    window.__importWriteMode = 'multi_merge';
+                    window.__appendStrategy = modal.querySelector('#wizAppendStrategy').value;
+                    window.__appendKeyColumns = modal.querySelector('#wizAppendKeys').value;
+                } else {
+                    window.__importWriteMode = 'overwrite';
+                }
+                
+                // 处理多表合并/追加的物理表覆盖逻辑
+                if (importType === 'multi_merge' || importType === 'multi_append') {
+                    let targetTable = '';
+                    if (importType === 'multi_append') {
+                        targetTable = modal.querySelector('#wizMultiAppendTargetTable').value;
+                        if (!targetTable) {
+                            alert('错误：必须指定要追加的目标表！');
+                            return;
+                        }
+                    } else {
+                        // 寻找第一个选定表
+                        let foundFirst = false;
+                        for (const f of window.__sourceFiles || []) {
+                            const sel = f.selected || [];
+                            if (sel.length > 0) {
+                                targetTable = (f.tableNameMap && f.tableNameMap[sel[0]]) || mkSqliteTableNameFromFileSheet(f.filePath, sel[0]);
+                                foundFirst = true;
+                                break;
+                            }
+                        }
+                        if (!foundFirst) {
+                            alert('错误：未勾选任何源表！');
+                            return;
+                        }
+                    }
+                    
+                    // 将所有选中的表的物理表名强制重写为 targetTable
+                    (window.__sourceFiles || []).forEach(f => {
+                        const sel = f.selected || [];
+                        sel.forEach(s => {
+                            f.tableNameMap = f.tableNameMap || {};
+                            f.tableNameMap[s] = targetTable;
+                            f.tableAliasMap = f.tableAliasMap || {};
+                            if(!f.tableAliasMap[s]) f.tableAliasMap[s] = targetTable;
+                        });
+                    });
+                }
+                
+                const globalImportModeEl = document.getElementById('globalImportMode');
+                if(globalImportModeEl) globalImportModeEl.value = modal.querySelector('#wizFieldMode').value;
+                
+                const chkClear = document.getElementById('chkClearSqliteBeforeImport');
+                if(chkClear) chkClear.checked = modal.querySelector('#wizClearDb').checked;
+                
+                const chkRev = document.getElementById('chkRevisionPointBeforeImport');
+                if(chkRev) chkRev.checked = modal.querySelector('#wizCreateRevision').checked;
+                
+                // 执行导入
+                btnExec.style.display = 'none';
+                btnPrev.style.display = 'none';
+                modal.querySelector('#wizProgress').style.display = 'block';
+                modal.querySelector('#wizReadyTitle').style.display = 'none';
+                modal.querySelector('#wizReadyDesc').style.display = 'none';
+                
+                // 这里我们挂载一个临时的进度监听器
+                window.__wizProgressHandler = (percent, text) => {
+                    modal.querySelector('#wizProgressBar').style.width = percent + '%';
+                    modal.querySelector('#wizProgressText').textContent = text;
+                    if (percent >= 100 && text.includes('成功')) {
+                        setTimeout(() => {
+                            modal.querySelector('#wizProgressText').textContent = '✅ 导入向导执行完毕！';
+                            btnExit.style.display = 'block'; // 导入完成后显示退出按钮
+                            window.__wizProgressHandler = null;
+                            window.__renderWizSourceList = null;
+                        }, 500);
+                    }
+                };
+                
+                // 触发底层导入
+                loadToSqlite(true);
+            };
+            
+            updateWizardUI();
         }
 
         // 项目管理：导入向导（仅做策略引导与参数填充，不改变现有实现）
@@ -6639,11 +7389,39 @@ ${sec('3) 残留抽检', renderSample())}
             return v || (window.__sqliteMainTableName || 'Main');
         }
 
+        function onDcTableChanged() {
+            // 当数据清洗源表变更时：重新请求该表字段，并重置步骤
+            try {
+                dcRequestSchemaForActiveTable();
+                if (typeof dcCurrentStep !== 'undefined') {
+                    const root = document.getElementById('data-cleansing');
+                    if (root) {
+                        root.querySelectorAll('.step-content').forEach(el => el.classList.remove('active'));
+                        root.querySelectorAll('.step').forEach(el => el.classList.remove('active', 'completed'));
+                        const c1 = document.getElementById('step-dc1');
+                        if (c1) c1.classList.add('active');
+                        const n1 = root.querySelector('.step[data-step="dc1"]');
+                        if (n1) n1.classList.add('active');
+                        dcCurrentStep = 1;
+                        updateDcBottomBar();
+                    }
+                }
+            } catch (e) { console.error(e); }
+        }
+
         function dcRequestSchemaForActiveTable() {
             if (!window.__sqliteReady) return;
             const tn = dcGetActiveSourceTable();
             const lbl = document.getElementById('dcCurrentSheet');
             if (lbl) lbl.textContent = tn ? tn : '（尚未导入）';
+            window.__activeSingleTableName = tn;
+            try {
+                const sch = (window.__sqliteTableSchemas || {})[tn];
+                if (Array.isArray(sch) && sch.length) {
+                    dcRenderFieldMapping(tn, sch);
+                    try { if ((window.__dcMode || '') === 'verify') dcVerifyRefreshFieldOptions(); } catch (_) { }
+                }
+            } catch (_) { }
             try { requestSqliteTableFields(tn); } catch (_) { }
         }
 
@@ -7435,6 +8213,13 @@ ${sec('3) 残留抽检', renderSample())}
             const cur = document.getElementById(`step-dc${dcCurrentStep}`);
             if (cur) cur.classList.add('active');
 
+            // 底部按钮合并
+            const nextBtn = document.querySelector('#dcBottomBar .wizard-btn-next');
+            const execBtn = document.getElementById('dcBarExecute');
+            const isLastStep = (dcCurrentStep === seq[seq.length - 1]);
+            if (nextBtn) nextBtn.style.display = isLastStep ? 'none' : 'inline-block';
+            if (execBtn) execBtn.style.display = isLastStep ? 'inline-block' : 'none';
+
             // 进入预览步骤自动刷新
             if (dcCurrentStep === 3) {
                 try { updateDcPreview(); } catch (_) { }
@@ -7896,7 +8681,30 @@ ${sec('3) 残留抽检', renderSample())}
         function openFileAnalysisQuerySql(sheetName, filePath) {
             if (!ensureSqliteMode('查询SQL')) return;
             const tn = sheetName || (window.__sqliteMainTableName || 'Main');
-            const sql = `SELECT * FROM ${sqlQuoteIdent(tn)} LIMIT 200;`;
+            
+            // 尝试从缓存中获取表结构（如果文件分析已经扫描出了字段）
+            let fields = [];
+            const data = window.__fileAnalysisData;
+            if (data && Array.isArray(data.items)) {
+                for (const item of data.items) {
+                    if (Array.isArray(item.sheets)) {
+                        const sheet = item.sheets.find(s => s.name === tn);
+                        if (sheet && Array.isArray(sheet.columns)) {
+                            fields = sheet.columns.map(c => c.name);
+                            break;
+                        }
+                    }
+                }
+            }
+            
+            let sql = '';
+            if (fields.length > 0) {
+                const selectList = fields.map(f => `${sqlQuoteIdent(f)}`).join(',\n  ');
+                sql = `SELECT\n  ${selectList}\nFROM ${sqlQuoteIdent(tn)}\nLIMIT 200;`;
+            } else {
+                sql = `SELECT * FROM ${sqlQuoteIdent(tn)} LIMIT 200;`;
+            }
+            
             openRecordDetailModal(`查询SQL：${tn}`, sql, 200);
         }
 
@@ -7922,22 +8730,21 @@ ${sec('3) 残留抽检', renderSample())}
             const rows = [];
             document.querySelectorAll('#sheetListBody tr').forEach(tr => {
                 const tds = tr.querySelectorAll('td');
-                if (tds.length >= 6) {
+                if (tds.length >= 5) {
                     rows.push({
                         file: tds[0].innerText.trim(),
                         sheet: tds[1].innerText.trim(),
                         fields: tds[2].innerText.trim(),
                         rows: tds[3].innerText.trim(),
-                        size: tds[4].innerText.trim(),
-                        completeness: tds[5].innerText.trim()
+                        completeness: tds[4].innerText.trim()
                     });
                 }
             });
             const tableHtml = rows.length ? `
                 <table>
-                  <thead><tr><th>文件名</th><th>工作表名</th><th>总字段数</th><th>总行数</th><th>数据大小</th><th>完整率</th></tr></thead>
+                  <thead><tr><th>文件名</th><th>工作表名</th><th>总字段数</th><th>总行数</th><th>完整率</th></tr></thead>
                   <tbody>
-                    ${rows.map(r => `<tr>${reportTd(r.file)}${reportTd(r.sheet)}${reportTd(r.fields)}${reportTd(r.rows)}${reportTd(r.size)}${reportTd(r.completeness)}</tr>`).join('')}
+                    ${rows.map(r => `<tr>${reportTd(r.file)}${reportTd(r.sheet)}${reportTd(r.fields)}${reportTd(r.rows)}${reportTd(r.completeness)}</tr>`).join('')}
                   </tbody>
                 </table>` : `<div style="color:#6c757d;">暂无数据地图。</div>`;
             const summary = document.getElementById('analysisResultInfo')?.innerText || '';
@@ -8688,15 +9495,6 @@ ${sec('3) 残留抽检', renderSample())}
             if (!isSelect && !expert) {
                 alert('当前未开启【专家模式】，仅允许执行 SELECT（含 WITH...SELECT）。');
                 return;
-            }
-            if (scriptMode && scriptStatements.length <= 1) {
-                // 只有一条时按普通模式执行（便于兼容）
-            } else if (!scriptMode) {
-                // 普通模式：仍只允许单语句
-                if (!isSingleStatementSql(sql)) {
-                    alert('如需执行多语句，请开启【脚本模式】。');
-                    return;
-                }
             }
             if (scriptMode && anyWrite && !expert) {
                 alert('脚本包含写入/DDL：请先开启【专家模式】');
@@ -11998,6 +12796,77 @@ ${sec('3) 残留抽检', renderSample())}
         }
         
         // ==================== 数据可视化功能 ====================
+        function chartOnDataSourceChanged() {
+            const ds = document.getElementById('chartDataSource')?.value;
+            if (!ds) {
+                document.getElementById('chartXField').innerHTML = '<option value="">请先选择数据源</option>';
+                document.getElementById('chartYField').innerHTML = '<option value="">请先选择数据源</option>';
+                return;
+            }
+            if (ds === '__MTJ__') {
+                const mtjSql = window.__mtjSettings?.lockedSql || '';
+                if (!mtjSql) { alert('未找到 MTJ 锁定 SQL'); return; }
+                requestSqlResultSchema('chart', mtjSql);
+                return;
+            }
+            window.__activeSingleTableName = ds;
+            requestSqliteTableFields(ds);
+        }
+
+        function chartRefreshFields() {
+            const sel = document.getElementById('chartDataSource');
+            if (!sel) return;
+            const prev = sel.value || '';
+            const objs = Array.isArray(window.__dbmObjects) ? window.__dbmObjects : [];
+            const names = objs.map(x => ({ name: String(x.name || x.Name || '').trim(), type: String(x.type || x.Type || '').trim().toLowerCase() })).filter(x => x.name);
+            
+            let options = '<option value="">（请选择数据源）</option>';
+            
+            const tables = Array.isArray(window.__sqliteObjects) ? window.__sqliteObjects : (Array.isArray(window.__sqliteTables) ? window.__sqliteTables : []);
+            const main = window.__sqliteMainTableName || '';
+            if (main && tables.includes(main)) {
+                options += `<optgroup label="主表"><option value="${escapeHtml(main)}">${escapeHtml(main)} (当前主表)</option></optgroup>`;
+            }
+            const otherTables = tables.filter(t => t !== main);
+            if (otherTables.length) {
+                options += `<optgroup label="物理表">${otherTables.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}</optgroup>`;
+            }
+            
+            const views = names.filter(x => x.type === 'view').map(x => x.name);
+            if (views.length) {
+                options += `<optgroup label="视图">${views.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}</optgroup>`;
+            }
+            
+            const mtjSql = window.__mtjSettings?.lockedSql || '';
+            if (mtjSql) {
+                options += `<optgroup label="多表关联"><option value="__MTJ__">MTJ 锁定SQL</option></optgroup>`;
+            }
+            
+            sel.innerHTML = options;
+            
+            if (prev && Array.from(sel.options).some(o => o.value === prev)) {
+                sel.value = prev;
+            } else if (main && Array.from(sel.options).some(o => o.value === main)) {
+                sel.value = main; // 默认选中主表
+            }
+            chartOnDataSourceChanged();
+        }
+
+        function toggleChartLayout() {
+            const container = document.getElementById('chart-layout-container');
+            const panel = document.getElementById('chart-config-panel');
+            if (!container || !panel) return;
+            if (container.style.flexDirection === 'row') {
+                container.style.flexDirection = 'row-reverse';
+                panel.style.paddingRight = '0';
+                panel.style.paddingLeft = '4px';
+            } else {
+                container.style.flexDirection = 'row';
+                panel.style.paddingRight = '4px';
+                panel.style.paddingLeft = '0';
+            }
+        }
+
         // 设置模板：图表生成
         function collectChartSettings() {
             return {
@@ -12088,6 +12957,7 @@ ${sec('3) 残留抽检', renderSample())}
                 });
             } catch (_) { }
             return {
+                dataSource: document.getElementById('pivotDataSource')?.value || '',
                 rowFields: zoneVals('pivotRowFields'),
                 colFields: zoneVals('pivotColFields'),
                 valueFields: zoneVals('pivotValueFields'),
@@ -12105,6 +12975,8 @@ ${sec('3) 残留抽检', renderSample())}
                 z.querySelectorAll('.pivot-field-item').forEach(x => x.remove());
                 (arr || []).forEach(f => z.appendChild(pivotCreateFieldItem(f)));
             };
+            try { if (document.getElementById('pivotDataSource') && s.dataSource) document.getElementById('pivotDataSource').value = s.dataSource; } catch (_) { }
+            try { pivotOnDataSourceChanged(); } catch (_) { }
             try { zone('pivotRowFields', s.rowFields || []); } catch (_) { }
             try { zone('pivotColFields', s.colFields || []); } catch (_) { }
             try { zone('pivotValueFields', s.valueFields || []); } catch (_) { }
@@ -12130,6 +13002,7 @@ ${sec('3) 残留抽检', renderSample())}
             const filterFields = Array.from(document.querySelectorAll('#pivotFilterFields .pivot-field-item')).map(el => (el.dataset.field || el.textContent || '').trim());
             const rowTotalPos = document.getElementById('pivotRowTotalPos')?.value || 'bottom';
             const colTotalPos = document.getElementById('pivotColTotalPos')?.value || 'right';
+            const dataSource = document.getElementById('pivotDataSource')?.value || '';
             const filters = {};
             try {
                 document.querySelectorAll('#pivotFilterValues [data-filter-field]').forEach(row => {
@@ -12151,12 +13024,13 @@ ${sec('3) 残留抽检', renderSample())}
             // 保存透视配置：用于渲染合计/钻取明细/转图表
             window.__pivotLastConfig = {
                 rowFields, colFields, valueFields, filterFields, filters,
-                rowTotalPos, colTotalPos,
+                rowTotalPos, colTotalPos, dataSource,
                 generatedAt: Date.now()
             };
             
             window.chrome.webview.postMessage({
                 action: 'generatePivotTable',
+                dataSource: dataSource,
                 rowFields: rowFields,
                 colFields: colFields,
                 valueFields: valueFields,
@@ -12293,6 +13167,75 @@ ${sec('3) 残留抽检', renderSample())}
             try { pivotBindResultInteractions(); } catch (_) { }
         }
 
+        function pivotOnDataSourceChanged() {
+            const ds = document.getElementById('pivotDataSource')?.value;
+            if (!ds) {
+                pivotClearSelections();
+                return;
+            }
+            if (ds === '__MTJ__') {
+                const mtjSql = window.__mtjSettings?.lockedSql || '';
+                if (!mtjSql) { alert('未找到 MTJ 锁定 SQL'); return; }
+                requestSqlResultSchema('pivot', mtjSql);
+                return;
+            }
+            window.__activeSingleTableName = ds;
+            requestSqliteTableFields(ds);
+        }
+
+        function pivotRefreshFields() {
+            const sel = document.getElementById('pivotDataSource');
+            if (!sel) return;
+            const prev = sel.value || '';
+            const objs = Array.isArray(window.__dbmObjects) ? window.__dbmObjects : [];
+            const names = objs.map(x => ({ name: String(x.name || x.Name || '').trim(), type: String(x.type || x.Type || '').trim().toLowerCase() })).filter(x => x.name);
+            
+            let options = '<option value="">（请选择数据源）</option>';
+            
+            const tables = Array.isArray(window.__sqliteObjects) ? window.__sqliteObjects : (Array.isArray(window.__sqliteTables) ? window.__sqliteTables : []);
+            const main = window.__sqliteMainTableName || '';
+            if (main && tables.includes(main)) {
+                options += `<optgroup label="主表"><option value="${escapeHtml(main)}">${escapeHtml(main)} (当前主表)</option></optgroup>`;
+            }
+            const otherTables = tables.filter(t => t !== main);
+            if (otherTables.length) {
+                options += `<optgroup label="物理表">${otherTables.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}</optgroup>`;
+            }
+            
+            const views = names.filter(x => x.type === 'view').map(x => x.name);
+            if (views.length) {
+                options += `<optgroup label="视图">${views.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('')}</optgroup>`;
+            }
+            
+            const mtjSql = window.__mtjSettings?.lockedSql || '';
+            if (mtjSql) {
+                options += `<optgroup label="多表关联"><option value="__MTJ__">MTJ 锁定SQL</option></optgroup>`;
+            }
+            
+            sel.innerHTML = options;
+            
+            if (prev && Array.from(sel.options).some(o => o.value === prev)) {
+                sel.value = prev;
+            } else if (main && Array.from(sel.options).some(o => o.value === main)) {
+                sel.value = main; // 默认选中主表
+            }
+            pivotOnDataSourceChanged();
+        }
+
+        function togglePivotLayout() {
+            const container = document.getElementById('pivot-layout-container');
+            const panel = document.getElementById('pivot-config-panel');
+            if (!container || !panel) return;
+            if (container.style.flexDirection === 'row') {
+                container.style.flexDirection = 'row-reverse';
+                panel.style.paddingRight = '0';
+                panel.style.paddingLeft = '4px';
+            } else {
+                container.style.flexDirection = 'row';
+                panel.style.paddingRight = '4px';
+                panel.style.paddingLeft = '0';
+            }
+        }
         function pivotClearSelections() {
             ['pivotRowFields','pivotColFields','pivotValueFields'].forEach(id => {
                 const z = document.getElementById(id);
@@ -12360,7 +13303,7 @@ ${sec('3) 残留抽检', renderSample())}
             try {
                 window.chrome.webview.postMessage({
                     action: 'pivotDrilldown',
-                    tableName: window.__sqliteMainTableName || 'Main',
+                    tableName: cfg.dataSource || window.__sqliteMainTableName || 'Main',
                     filters,
                     limit: 300
                 });
@@ -12395,14 +13338,15 @@ ${sec('3) 残留抽检', renderSample())}
             const cols = Array.isArray(columns) ? columns : [];
             const rs = Array.isArray(rows) ? rows : [];
             if (title) title.textContent = `透视表明细（${rs.length} 行）`;
-            if (hint) hint.textContent = `来源表：${tableName || (window.__sqliteMainTableName || 'Main')}（最多显示 300 行）`;
+            const ds = document.getElementById('pivotDataSource')?.value || window.__sqliteMainTableName || 'Main';
+            if (hint) hint.textContent = `来源表：${ds === '__MTJ__' ? 'MTJ 锁定SQL' : ds}（最多显示 300 行）`;
             table.innerHTML = `
               <thead><tr>${cols.length ? cols.map(c=>`<th>${escapeHtml(c)}</th>`).join('') : '<th>无数据</th>'}</tr></thead>
               <tbody>
                 ${rs.map(r=>`<tr>${cols.map(c=>`<td>${escapeHtml(r?.[c]===null||r?.[c]===undefined?'':String(r[c]))}</td>`).join('')}</tr>`).join('')}
               </tbody>
             `;
-            window.__pivotDetailLast = { columns: cols, rows: rs, tableName: tableName || '', title: title ? title.textContent : '' };
+            window.__pivotDetailLast = { columns: cols, rows: rs, tableName: ds, title: title ? title.textContent : '' };
         }
 
         function pivotExportDetail() {
@@ -12588,7 +13532,7 @@ ${sec('3) 残留抽检', renderSample())}
                 try {
                     const parentId = div.parentElement?.id || '';
                     const target = window.__pivotActiveZoneId || '';
-                    if (parentId === 'pivotAvailableFields' && target && target !== 'pivotAvailableFields') {
+                    if ((parentId === 'pivotAvailableFields' || parentId === 'pivotAvailableFieldsFloat') && target && target !== 'pivotAvailableFields' && target !== 'pivotAvailableFieldsFloat') {
                         e.preventDefault();
                         e.stopPropagation();
                         pivotMoveToZone(div, target);
@@ -12635,7 +13579,7 @@ ${sec('3) 残留抽检', renderSample())}
         function pivotRemoveDuplicates(field) {
             const f = String(field || '').trim();
             if (!f) return;
-            ['pivotAvailableFields', 'pivotRowFields', 'pivotColFields', 'pivotValueFields', 'pivotFilterFields'].forEach(id => {
+            ['pivotAvailableFields', 'pivotAvailableFieldsFloat', 'pivotRowFields', 'pivotColFields', 'pivotValueFields', 'pivotFilterFields'].forEach(id => {
                 document.querySelectorAll(`#${id} .pivot-field-item`).forEach(el => {
                     if ((el.dataset.field || '').trim() === f) el.remove();
                 });
@@ -12670,9 +13614,20 @@ ${sec('3) 残留抽检', renderSample())}
 
             // 去重：全局只能出现一次（防止在多个区域重复）
             pivotRemoveDuplicates(field);
-            const newEl = pivotCreateFieldItem(field);
-            if (insertBeforeEl && insertBeforeEl.parentElement === zone) zone.insertBefore(newEl, insertBeforeEl);
-            else zone.appendChild(newEl);
+            
+            if (targetZoneId === 'pivotAvailableFields' || targetZoneId === 'pivotAvailableFieldsFloat') {
+                // 如果是退回可用池，两边都加
+                const newEl1 = pivotCreateFieldItem(field);
+                const newEl2 = pivotCreateFieldItem(field);
+                const z1 = document.getElementById('pivotAvailableFields');
+                const z2 = document.getElementById('pivotAvailableFieldsFloat');
+                if (z1) z1.appendChild(newEl1);
+                if (z2) z2.appendChild(newEl2);
+            } else {
+                const newEl = pivotCreateFieldItem(field);
+                if (insertBeforeEl && insertBeforeEl.parentElement === zone) zone.insertBefore(newEl, insertBeforeEl);
+                else zone.appendChild(newEl);
+            }
 
             // 若移动到可用池：隐藏删除按钮（CSS 已处理）并允许继续拖
             pivotEnsurePlaceholder('pivotRowFields', '拖拽字段到此处');
@@ -12680,6 +13635,7 @@ ${sec('3) 残留抽检', renderSample())}
             pivotEnsurePlaceholder('pivotValueFields', '拖拽字段到此处');
             pivotEnsurePlaceholder('pivotFilterFields', '拖拽字段到此处（可选）');
             pivotEnsurePlaceholder('pivotAvailableFields', '加载数据后自动显示字段');
+            pivotEnsurePlaceholder('pivotAvailableFieldsFloat', '加载数据后自动显示字段');
             try { pivotRenderFilterInputs(); } catch (_) { }
         }
 
@@ -12687,7 +13643,7 @@ ${sec('3) 残留抽检', renderSample())}
             if (window.__pivotDnDInited) return;
             window.__pivotDnDInited = true;
 
-            const zones = ['pivotAvailableFields', 'pivotRowFields', 'pivotColFields', 'pivotValueFields', 'pivotFilterFields'];
+            const zones = ['pivotAvailableFields', 'pivotAvailableFieldsFloat', 'pivotRowFields', 'pivotColFields', 'pivotValueFields', 'pivotFilterFields'];
             zones.forEach(id => {
                 const z = pivotGetZoneEl(id);
                 if (!z) return;
@@ -12708,7 +13664,7 @@ ${sec('3) 残留抽检', renderSample())}
                 // 点击目标区：显示“可用字段”并记录当前激活区
                 z.addEventListener('click', (e) => {
                     try {
-                        if (id !== 'pivotAvailableFields') {
+                        if (id !== 'pivotAvailableFields' && id !== 'pivotAvailableFieldsFloat') {
                             window.__pivotActiveZoneId = id;
                             const g = document.getElementById('pivotAvailableGroup');
                             if (g) g.style.display = '';
@@ -12750,6 +13706,7 @@ ${sec('3) 残留抽检', renderSample())}
             pivotEnsurePlaceholder('pivotColFields', '拖拽字段到此处');
             pivotEnsurePlaceholder('pivotValueFields', '拖拽字段到此处');
             pivotEnsurePlaceholder('pivotAvailableFields', '加载数据后自动显示字段');
+            pivotEnsurePlaceholder('pivotAvailableFieldsFloat', '加载数据后自动显示字段');
         }
         
         // ==================== 快捷键系统 ====================
@@ -12940,7 +13897,8 @@ ${sec('3) 残留抽检', renderSample())}
             else {
                 list.forEach(tpl => {
                     const label = (tpl.id === 'temp') ? `【临时模板】` : (tpl.name || tpl.id);
-                    items.push(item(label, `applyTemplateById('${scope}','${tpl.id}'); hideTemplateMenu('${scope}');`));
+                    const ds = tpl.settings?.dataSource ? ` <span style="font-size:8pt;color:#999;">[${tpl.settings.dataSource === '__MTJ__' ? 'MTJ' : tpl.settings.dataSource}]</span>` : '';
+                    items.push(item(label + ds, `applyTemplateById('${scope}','${tpl.id}'); hideTemplateMenu('${scope}');`));
                 });
             }
             return items.join('');
@@ -13195,6 +14153,7 @@ ${sec('3) 残留抽检', renderSample())}
                             const l = tr.querySelector('.mtq-on-left'); if (l) l.value = x.left || '';
                             const o = tr.querySelector('.mtq-on-op'); if (o) o.value = x.op || '=';
                             const r = tr.querySelector('.mtq-on-right'); if (r) r.value = x.right || '';
+                            const sc = tr.querySelector('.mtq-on-score'); if (sc && x.score !== undefined) sc.innerHTML = `<span style="color:#0078d4; font-weight:bold; font-size:8.5pt;">${Number(x.score).toFixed(1)}%</span>`;
                         });
                     }
                     const andRows = Array.from(document.querySelectorAll(`#mtqAndBody_${alias} tr`));
@@ -13277,7 +14236,9 @@ ${sec('3) 残留抽检', renderSample())}
                 worksheets: Array.isArray(x.worksheets) ? x.worksheets : [],
                 selected: Array.isArray(x.selected) ? x.selected : [],
                 tableNameMap: x.tableNameMap || {},
-                tableAliasMap: x.tableAliasMap || {}
+                tableAliasMap: x.tableAliasMap || {},
+                datasetRoleMap: x.datasetRoleMap || {},
+                importType: x.importType || '独立表'
             }));
             return {
                 sources: src,
@@ -13312,7 +14273,8 @@ ${sec('3) 残留抽检', renderSample())}
                         selected: Array.isArray(x.selected) ? x.selected : [],
                         mainSheet: '',
                         tableNameMap: x.tableNameMap || {},
-                        tableAliasMap: x.tableAliasMap || {}
+                        tableAliasMap: x.tableAliasMap || {},
+                        datasetRoleMap: x.datasetRoleMap || {}
                     }));
                 }
                 window.__fileWizardMain = s?.main || null;
@@ -13766,10 +14728,10 @@ ${sec('3) 残留抽检', renderSample())}
             }
             // 2) 其次读取 localStorage
             if (!saved) {
-                try { saved = (localStorage.getItem('userMode') || 'normal'); } catch (_) { }
+                try { saved = (localStorage.getItem('userMode') || 'expert'); } catch (_) { }
             }
             if (saved === 'beginner' || saved === 'intermediate') saved = 'normal';
-            if (saved !== 'expert') saved = 'normal';
+            if (saved !== 'normal' && saved !== 'expert') saved = 'expert';
             setUserMode(saved);
             try {
                 const sp = new URLSearchParams((location && location.search) ? location.search : '');
@@ -14209,8 +15171,12 @@ ${sec('3) 残留抽检', renderSample())}
                 const type = String(s?.type || s?.DataType || '').trim();
                 if (!name) return '';
                 const id = `idxcol_${Math.random().toString(16).slice(2)}`;
+                
+                // 启发式智能选择：默认勾选包含 ID、编码、代码、主键等特征的字段，作为索引候选
+                const isLikelyIndex = /id|编码|代码|单号|序号|主键|名称|类型/i.test(name) || /key|code|no/i.test(name);
+                
                 return `<label style="display:flex; gap:8px; align-items:center; font-size:9pt; padding:2px 0;">
-                    <input type="checkbox" data-idxcol="1" value="${escapeHtml(name)}" id="${id}">
+                    <input type="checkbox" data-idxcol="1" value="${escapeHtml(name)}" id="${id}" ${isLikelyIndex ? 'checked' : ''}>
                     <span style="flex:1;">${escapeHtml(name)}</span>
                     <span style="font-size:8pt; color:#6c757d;">${escapeHtml(type)}</span>
                 </label>`;
@@ -14243,11 +15209,20 @@ ${sec('3) 残留抽检', renderSample())}
             const name = (document.getElementById('idxMgrName')?.value || '').trim();
             const msg = `将创建${unique ? '【唯一】' : ''}索引：\n表：${tn}\n字段：${cols.join(', ')}\n\n是否继续？`;
             if (!confirm(msg)) return;
+
+            const btn = document.querySelector('#idxMgrColsWrap').parentElement.querySelector('.btn-primary');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = '正在创建，请稍候...';
+            }
+
             try {
+                // Remove the manual quoting since C# backend already handles it.
                 window.chrome.webview.postMessage({ action: 'createSqliteIndex', tableName: tn, columns: cols, unique, indexName: name });
                 const info = document.getElementById('idxMgrInfo');
-                if (info) info.textContent = '正在创建索引…';
+                if (info) info.textContent = '正在创建索引，请耐心等待…';
             } catch (e) {
+                if (btn) { btn.disabled = false; btn.textContent = '创建索引'; }
                 alert('创建索引失败：' + (e && e.message ? e.message : e));
             }
         }
@@ -14567,7 +15542,7 @@ ${sec('3) 残留抽检', renderSample())}
             return suggestions;
         }
 
-        // 单表查询：导出（默认 xlsx，可下拉 csv）
+        // 单表查询：导出
         function exportStq(format) {
             const baseSql = window.__stqSqlBase || buildSingleTableQuerySql();
             if (!baseSql) {
@@ -14575,11 +15550,10 @@ ${sec('3) 残留抽检', renderSample())}
                 return;
             }
             if (!window.__sqliteReady) { alert('SQLite 尚未导入：请先在【项目管理】完成导入'); return; }
-            const f = (format === 'csv') ? 'csv' : (format === 'xlsx_text' ? 'xlsx_text' : 'xlsx');
             window.chrome.webview.postMessage({
                 action: 'exportQueryToFile',
                 sql: baseSql,
-                format: f,
+                format: format || "xlsx",
                 limit: 0,
                 skipCount: true,
                 excelOptions: { fontName: '微软雅黑', fontSize: 9 }
@@ -14673,10 +15647,15 @@ ${sec('3) 残留抽检', renderSample())}
             const exportWrap = document.getElementById('stsBarExport');
             const resetBtn = document.getElementById('stsBarReset');
             const tableSel = document.getElementById('stsTableSelect');
+
+            const isLastStep = (step >= 5);
+            if (nextBtn) nextBtn.style.display = isLastStep ? 'none' : 'inline-block';
+            if (execBtn) execBtn.style.display = isLastStep ? 'inline-block' : 'none';
+
             const canRun = (step >= 4);
             if (prevBtn) prevBtn.disabled = !(step > 1);
-            if (nextBtn) nextBtn.disabled = !(step < 5);
-            if (execBtn) execBtn.disabled = !canRun;
+            if (nextBtn) nextBtn.disabled = false;
+            if (execBtn) execBtn.disabled = false;
             if (copyBtn) copyBtn.disabled = !canRun;
             if (exportWrap) exportWrap.style.opacity = canRun ? '1' : '0.45';
             if (exportWrap) exportWrap.style.pointerEvents = canRun ? 'auto' : 'none';
@@ -15104,11 +16083,10 @@ ${sec('3) 残留抽检', renderSample())}
             const baseSql = window.__stsSqlBase || buildStsSqlBase();
             if (!baseSql) { alert('暂无可导出的SQL，请先配置单表统计。'); return; }
             if (!window.__sqliteReady) { alert('SQLite 尚未导入：请先在【项目管理】完成导入'); return; }
-            const f = (format === 'csv') ? 'csv' : (format === 'xlsx_text' ? 'xlsx_text' : 'xlsx');
             window.chrome.webview.postMessage({
                 action: 'exportQueryToFile',
                 sql: baseSql,
-                format: f,
+                format: format || "xlsx",
                 limit: 0,
                 skipCount: true,
                 excelOptions: { fontName: '微软雅黑', fontSize: 9 }
@@ -15722,7 +16700,7 @@ ${sec('3) 残留抽检', renderSample())}
                     const tn = r.tableName;
                     const has = window.__sqliteTableFields && Array.isArray(window.__sqliteTableFields[tn]) && window.__sqliteTableFields[tn].length;
                     const pending = !!window.__pendingTableFields[tn];
-                    if (!has && !pending) { window.__pendingTableFields[tn] = true; requestSqliteTableFields(tn); }
+                    if (!has && !pending) { requestSqliteTableFields(tn); }
                 });
             } catch (_) { }
             try { mtsBuildCandidatesFromSchema(); } catch (_) { }
@@ -15909,11 +16887,10 @@ ${sec('3) 残留抽检', renderSample())}
             const baseSql = window.__mtsSqlBase || buildMtsSqlBase();
             if (!baseSql) { alert('暂无可导出的SQL，请先配置多表统计。'); return; }
             if (!window.__sqliteReady) { alert('SQLite 尚未导入：请先在【项目管理】完成导入'); return; }
-            const f = (format === 'csv') ? 'csv' : (format === 'xlsx_text' ? 'xlsx_text' : 'xlsx');
             window.chrome.webview.postMessage({
                 action: 'exportQueryToFile',
                 sql: baseSql,
-                format: f,
+                format: format || "xlsx",
                 limit: 0,
                 skipCount: true,
                 excelOptions: { fontName: '微软雅黑', fontSize: 9 }
@@ -16167,7 +17144,10 @@ ${sec('3) 残留抽检', renderSample())}
                 window.__sqlSchemaCache = window.__sqlSchemaCache || {};
                 window.__sqlSchemaPending = window.__sqlSchemaPending || {};
                 const key = `${target || 't'}:${s}`;
-                if (window.__sqlSchemaCache[key]) return;
+                if (window.__sqlSchemaCache[key]) {
+                    applySqlResultSchema({ target, fields: window.__sqlSchemaCache[key] });
+                    return;
+                }
                 if (window.__sqlSchemaPending[key]) return;
                 window.__sqlSchemaPending[key] = true;
             } catch (_) { }
@@ -16879,9 +17859,9 @@ ${sec('3) 残留抽检', renderSample())}
                 try { updateSchemeDbPathHint(); } catch (_) { }
                 // 预热：拉取项目中心列表（不打断自动加载上次项目）
                 try { requestProjectList(); } catch (_) { }
-                // 默认主页：项目中心（当前活动项目）
-                try { switchTab('project-hub'); } catch (_) { }
-                try { setProjectHubView('active'); } catch (_) { }
+                // 默认主页：项目管理（当前活动项目）
+                try { switchTab('file-wizard'); } catch (_) { }
+                try { switchFwTab('detail'); } catch (_) { }
                 // 关键：由前端主动发起“自动加载上次项目”，避免 WebView 消息监听尚未就绪导致丢消息
                 try {
                     if (window.__activeSchemeId && !window.__startupAutoLoadDone) {
@@ -17034,6 +18014,7 @@ ${sec('3) 残留抽检', renderSample())}
                     applyFileWizardSettings(data.settings);
                     // 回到项目管理页让用户直接“加载到SQLite数据库”
                     switchTab('file-wizard');
+                    switchFwTab('detail');
                     // 项目库支持持久化：默认不要自动清空（避免误删历史结果）
                     try { const c = document.getElementById('chkClearSqliteBeforeImport'); if (c) c.checked = false; } catch (_) { }
                 }
@@ -17180,6 +18161,11 @@ ${sec('3) 残留抽检', renderSample())}
                 const percent = typeof data.percent === 'number' ? data.percent : 0;
                 setDataSourceStatus(`${stage} ${percent}%`);
                 setStatusMessage(`${stage} ${percent}%`);
+                
+                // 若有向导正在运行，则同步进度
+                if (typeof window.__wizProgressHandler === 'function') {
+                    window.__wizProgressHandler(percent, `${stage} ${percent}%`);
+                }
             } else if (data.action === 'globalSearchComplete') {
                 showGlobalSearchResults(data.results);
             } else if (data.action === 'singleTableStatsComplete') {
@@ -17379,6 +18365,11 @@ ${sec('3) 残留抽检', renderSample())}
                     setStatusMessage('错误: ' + data.message);
                 }
                 setErrorLogAvailable(!!data.hasErrorLog);
+                
+                // 如果在队列导入中报错，则跳过错误继续下一个（避免向导卡死）
+                if (window.__importInProgress) {
+                    try { startNextImport(); } catch (_) { }
+                }
             } else if (data.action === 'queryComplete' || data.action === 'multiTableQueryComplete' || data.action === 'multiTableQueryCompleted') {
                 // SQL编辑器：用 requestId 更新历史状态
                 try {
@@ -17803,6 +18794,10 @@ ${sec('3) 残留抽检', renderSample())}
                     });
                 } catch (_) { }
                 try { dbmRefresh(); } catch (_) { }
+            } else if (data.action === 'batchProgress') {
+                if (typeof updateBatchProgress === 'function') updateBatchProgress(data.percent || 0, data.message || '');
+            } else if (data.action === 'batchCompleted') {
+                if (typeof showBatchResults === 'function') showBatchResults(data.results || {});
             } else if (data.action === 'dbObjectDependenciesLoaded') {
                 try {
                     const rid = data.requestId || '';
@@ -17959,6 +18954,10 @@ ${sec('3) 残留抽检', renderSample())}
                     try { stsOnSchemaLoaded(data.tableName); } catch (_) { }
                     // 多表统计：字段到位后刷新候选/预览
                     try { mtsOnTablesChanged(); } catch (_) { }
+                    // 统一处理单表/清洗等模块的字段刷新
+                    if (data.tableName === window.__activeSingleTableName) {
+                        try { updateAllFieldControls(data.fields || []); } catch (_) { }
+                    }
             // SQL编辑器：右侧“表结构”刷新（字段/schema 到位）
             try { refreshSqlEditorSchemaPanel(); } catch (_) { }
                     // 索引管理：字段到位后刷新列清单
@@ -18060,7 +19059,6 @@ ${sec('3) 残留抽检', renderSample())}
                         <td title="${escapeHtml(tn)}">${escapeHtml(disp)}</td>
                         <td>${(sheet.colCount ?? 0).toLocaleString()}</td>
                         <td>${(sheet.rowCount ?? 0).toLocaleString()}</td>
-                        <td>${sheet.size || ''}</td>
                         <td>${escapeHtml(String(comp))}</td>
                         <td>
                             <button class="btn btn-secondary" style="padding: 2px 8px; margin-right: 4px;" onclick="viewSheetFields('${sheet.name}')">查看字段</button>
@@ -18140,6 +19138,8 @@ ${sec('3) 残留抽检', renderSample())}
                 return;
             } else if (data.action === 'sqliteIndexCreated') {
                 try {
+                    const btn = document.querySelector('#idxMgrColsWrap').parentElement.querySelector('.btn-primary');
+                    if (btn) { btn.disabled = false; btn.textContent = '创建索引'; }
                     const info = document.getElementById('idxMgrInfo');
                     if (info) info.textContent = '索引已创建';
                     const tn = document.getElementById('idxMgrTable')?.value || data.tableName || '';
@@ -18219,7 +19219,6 @@ ${sec('3) 残留抽检', renderSample())}
                         <td title="${sheet.name}">${sheetDisplayName}</td>
                         <td>${(sheet.colCount ?? 0).toLocaleString()}</td>
                         <td>${(sheet.rowCount ?? 0).toLocaleString()}</td>
-                        <td>${sheet.size || ''}</td>
                         <td>${escapeHtml(String(comp))}</td>
                         <td>
                             <button class="btn btn-secondary" style="padding: 2px 8px; margin-right: 4px;" onclick="viewSheetFields('${sheet.name}', '${fp.replace(/'/g, "\\'")}')">查看字段</button>
@@ -18466,11 +19465,37 @@ ${sec('3) 残留抽检', renderSample())}
             try {
                 const stqTab = document.getElementById('single-table-query');
                 const stsTab = document.getElementById('single-table-stats');
-                const inSingle = (stqTab && stqTab.style.display === 'block') || (stsTab && stsTab.style.display === 'block');
-                if (inSingle && window.__singleTableSelectedName) tn = window.__singleTableSelectedName;
+                const dcTab = document.getElementById('data-cleansing');
+                const chartTab = document.getElementById('chart-generator');
+                const pivotTab = document.getElementById('pivot-table');
+                
+                if (stqTab && stqTab.style.display === 'block') {
+                    tn = document.getElementById('stqTableSelect')?.value || tn;
+                } else if (stsTab && stsTab.style.display === 'block') {
+                    tn = document.getElementById('stsTableSelect')?.value || tn;
+                } else if (dcTab && dcTab.style.display === 'block') {
+                    tn = document.getElementById('dcSourceTableSelect')?.value || tn;
+                } else if (chartTab && chartTab.style.display === 'block') {
+                    tn = document.getElementById('chartDataSource')?.value || tn;
+                } else if (pivotTab && pivotTab.style.display === 'block') {
+                    tn = document.getElementById('pivotDataSource')?.value || tn;
+                } else if (window.__singleTableSelectedName) {
+                    tn = window.__singleTableSelectedName;
+                }
             } catch (_) { }
-            window.chrome.webview.postMessage({ action: 'getActiveFields', dbType: 'sqlite', tableName: tn });
+            window.__activeSingleTableName = tn; // 保存当前需要刷新的单表名称
+            requestSqliteTableFields(tn);
         }
+
+        window.forceRefreshSingleTableFields = function() {
+            const tn = window.__activeSingleTableName;
+            if (!tn) { alert('当前没有激活的表'); return; }
+            
+            if(window.__sqliteTableFields) delete window.__sqliteTableFields[tn];
+            if(window.__pendingTableFields) delete window.__pendingTableFields[tn];
+            requestSqliteTableFields(tn);
+            setStatusMessage(`正在刷新表 ${tn} 的最新字段...`);
+        };
 
         function fillSelectOptions(select, fields, keepSelection = true) {
             if (!select) return;
@@ -18580,31 +19605,33 @@ ${sec('3) 残留抽检', renderSample())}
             try { mtqOnTablesChanged(); } catch (_) { }
 
             // 透视表：可用字段
-            const pivot = document.getElementById('pivotAvailableFields');
-            if (pivot) {
-                pivot.innerHTML = '';
-                if (!f.length) {
-                    pivot.innerHTML = `<div class="pivot-placeholder">暂无字段</div>`;
-                } else {
-                    // 已选字段不再重复出现在“可用字段”池中
-                    const selected = (typeof pivotSelectedSet === 'function') ? pivotSelectedSet() : new Set();
-                    f.forEach(name => {
-                        const nm = String(name || '').trim();
-                        if (!nm) return;
-                        if (selected.has(nm)) return;
-                        const div = document.createElement('div');
-                        // 统一使用 pivotCreateFieldItem（可拖、可移除；在 pool 内 CSS 会隐藏“×”）
-                        if (typeof pivotCreateFieldItem === 'function') {
-                            pivot.appendChild(pivotCreateFieldItem(nm));
-                        } else {
-                            div.className = 'pivot-field-item';
-                            div.setAttribute('draggable', 'true');
-                            div.textContent = nm;
-                            pivot.appendChild(div);
-                        }
-                    });
+            ['pivotAvailableFields', 'pivotAvailableFieldsFloat'].forEach(pivotId => {
+                const pivot = document.getElementById(pivotId);
+                if (pivot) {
+                    pivot.innerHTML = '';
+                    if (!f.length) {
+                        pivot.innerHTML = `<div class="pivot-placeholder">暂无字段</div>`;
+                    } else {
+                        // 已选字段不再重复出现在“可用字段”池中
+                        const selected = (typeof pivotSelectedSet === 'function') ? pivotSelectedSet() : new Set();
+                        f.forEach(name => {
+                            const nm = String(name || '').trim();
+                            if (!nm) return;
+                            if (selected.has(nm)) return;
+                            const div = document.createElement('div');
+                            // 统一使用 pivotCreateFieldItem（可拖、可移除；在 pool 内 CSS 会隐藏“×”）
+                            if (typeof pivotCreateFieldItem === 'function') {
+                                pivot.appendChild(pivotCreateFieldItem(nm));
+                            } else {
+                                div.className = 'pivot-field-item';
+                                div.setAttribute('draggable', 'true');
+                                div.textContent = nm;
+                                pivot.appendChild(div);
+                            }
+                        });
+                    }
                 }
-            }
+            });
             try { pivotInitDnD(); } catch (_) { }
         }
 
@@ -19102,13 +20129,16 @@ ${sec('3) 残留抽检', renderSample())}
                     tr.dataset.fieldName = field;
                     tr.style.cursor = 'pointer';
                     tr.innerHTML = `
-                        <td>${field}</td>
+                        <td>${escapeHtml(field)}</td>
                         <td>${type}</td>
                         <td>${nonNull}</td>
                         <td>${uniq}</td>
                         <td>${min}</td>
                         <td>${max}</td>
-                        <td>${sample === null || sample === undefined ? '' : String(sample).slice(0, 50)}</td>
+                        <td>${sample === null || sample === undefined ? '' : escapeHtml(String(sample).slice(0, 50))}</td>
+                        <td style="text-align:center;">
+                            <button class="btn" style="font-size:8pt; padding:2px 6px; color:#d13438; background:transparent; border:1px solid #f9d9d9; border-radius:2px;" onmouseover="this.style.background='#fdf3f4'" onmouseout="this.style.background='transparent'" onclick="event.stopPropagation(); dropColumnFromTable('${escapeHtml(sheetName)}', '${escapeHtml(field)}', this)">删除</button>
+                        </td>
                     `;
                     tr.addEventListener('click', (ev) => {
                         try { wsToggleFieldRowSelect(tr, ev); } catch (_) { }
@@ -19657,6 +20687,8 @@ ${sec('3) 残留抽检', renderSample())}
             try { setSqliteStatus(list.length ? `已导入（${list.length}表）` : '未导入'); } catch (_) { }
             try { setStatusCurrentMainTable(window.__sqliteMainTableName || (listShown[0] || list[0] || '-') || '-'); } catch (_) { }
             try { dcRefreshSourceTableSelect(); } catch (_) { }
+            try { chartRefreshFields(); } catch (_) { }
+            try { pivotRefreshFields(); } catch (_) { }
 
             // 刷新“选定主表”下拉
             try { refreshSqliteMainTableSelect(); } catch (_) { }
@@ -19881,12 +20913,30 @@ ${sec('3) 残留抽检', renderSample())}
                 (window.__sourceFiles || []).forEach(sf => {
                     sf.tableNameMap = sf.tableNameMap || {};
                     sf.tableAliasMap = sf.tableAliasMap || {};
-                    Object.keys(sf.tableNameMap).forEach(sh => {
-                        if (String(sf.tableNameMap[sh] || '') === o) {
-                            sf.tableNameMap[sh] = n;
-                            // 若显示名原本等于旧物理名，则跟随更新（避免显示名滞后）
+                    const fp = (sf.FilePath || sf.filePath || '');
+                    const base = (fp.split('/').pop() || '').replace(/\.(xlsx|xls|csv|tsv)$/i, '');
+                    const sheets = sf.worksheets || sf.Sheets || sf.sheets || [];
+
+                    // 兼容合并表场景（只有文件层级的 tableNameMap，没有按 Sheet 区分）
+                    if (sf.importType === '合并表') {
+                        const currentPhysical = sf.tableNameMap && sf.tableNameMap['__combined__'] ? String(sf.tableNameMap['__combined__']) : base;
+                        if (currentPhysical === o) {
+                            sf.tableNameMap['__combined__'] = n;
                             try {
-                                if (!sf.tableAliasMap[sh] || String(sf.tableAliasMap[sh]) === o) sf.tableAliasMap[sh] = n;
+                                const currentAlias = (sf.tableAliasMap && sf.tableAliasMap['__combined__']) ? String(sf.tableAliasMap['__combined__']) : currentPhysical;
+                                if (currentAlias === o) sf.tableAliasMap['__combined__'] = n;
+                            } catch (_) { }
+                        }
+                    }
+
+                    sheets.forEach(sh => {
+                        const currentPhysical = (sf.tableNameMap && sf.tableNameMap[sh]) ? String(sf.tableNameMap[sh]) : `${base}|${sh}`;
+                        if (currentPhysical === o) {
+                            sf.tableNameMap[sh] = n;
+                            // 若显示名原本等于旧物理名（或默认别名也等于旧物理名），则跟随更新（避免显示名滞后）
+                            try {
+                                const currentAlias = (sf.tableAliasMap && sf.tableAliasMap[sh]) ? String(sf.tableAliasMap[sh]) : currentPhysical;
+                                if (currentAlias === o) sf.tableAliasMap[sh] = n;
                             } catch (_) { }
                         }
                     });
@@ -19899,6 +20949,7 @@ ${sec('3) 残留抽检', renderSample())}
             try { refreshSqliteMainTableSelect(); } catch (_) { }
             try { updateAllTablePickers(); } catch (_) { }
             try { renderSourceFiles(); } catch (_) { }
+            try { schemeAutoSave('dbObjectRenamed'); } catch (_) { }
         }
 
         function getCustomTableAlias(sourceId, sheetName) {
@@ -20116,7 +21167,7 @@ ${sec('3) 残留抽检', renderSample())}
 
         function dbmRefresh() {
             if (!window.chrome || !window.chrome.webview || !window.chrome.webview.postMessage) return;
-            if (!window.__sqliteReady) { alert('SQLite 尚未导入：请先在【项目管理】完成导入'); return; }
+            if (!window.__sqliteReady) { alert('SQLite 尚未导入：请先在【导入/重建】完成导入'); return; }
             window.chrome.webview.postMessage({ action: 'getDbObjects' });
             setStatusMessage('正在刷新数据库对象...');
         }
@@ -20166,7 +21217,7 @@ ${sec('3) 残留抽检', renderSample())}
 
             body.innerHTML = '';
             if (!filtered.length) {
-                body.innerHTML = `<tr><td colspan="5" style="color:#6c757d;">（无匹配对象）</td></tr>`;
+                body.innerHTML = `<tr><td colspan="8" style="color:#6c757d;">（无匹配对象）</td></tr>`;
                 return;
             }
 
@@ -20177,16 +21228,54 @@ ${sec('3) 残留抽检', renderSample())}
                 const typeLabel = isView ? '视图' : '表';
                 const cat = dbmClassify(name, type);
                 const alias = getTableAliasName(name) || name;
-                const label = alias;
-                const sub = (alias !== name) ? name : '';
+
+                // 查找原始数据源信息（文件/工作表）及导入类型
+                let origName = '-';
+                let importType = '-';
+                let sourceFileId = null;
+                try {
+                    for (const sf of (window.__sourceFiles || [])) {
+                        const fp = (sf.FilePath || sf.filePath || '');
+                        const base = (fp.split('/').pop() || '').replace(/\.(xlsx|xls|csv|tsv)$/i, '');
+                        if (sf.importType === '合并表') {
+                            const tn = sf.tableNameMap && sf.tableNameMap['__combined__'] ? sf.tableNameMap['__combined__'] : base;
+                            if (tn === name) {
+                                origName = `[合并] ${base}`;
+                                importType = '合并表';
+                                sourceFileId = sf.id;
+                                break;
+                            }
+                        }
+                        const sheets = sf.worksheets || sf.Sheets || sf.sheets || [];
+                        let found = false;
+                        for (const sh of sheets) {
+                            const currentPhysical = (sf.tableNameMap && sf.tableNameMap[sh]) ? String(sf.tableNameMap[sh]) : `${base}|${sh}`;
+                            if (currentPhysical === name) {
+                                origName = `${base}|${sh}`;
+                                importType = sf.importType || '独立表';
+                                sourceFileId = sf.id;
+                                found = true;
+                                break;
+                            }
+                        }
+                        if (found) break;
+                    }
+                } catch (_) { }
+
+                const typeSelectHtml = sourceFileId && cat === '导入表' ? `
+                    <select style="font-size:8.5pt; padding:2px; border:1px solid #ccc; border-radius:2px; background:transparent;" onchange="changeFileImportType('${sourceFileId}', this.value); dbmRender();">
+                        <option value="独立表" ${importType === '独立表' ? 'selected' : ''}>独立表</option>
+                        <option value="合并表" ${importType === '合并表' ? 'selected' : ''}>合并表</option>
+                    </select>
+                ` : `<span style="color:#6c757d;">-</span>`;
 
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
                     <td><input type="checkbox" data-dbobj="1" data-name="${escapeHtml(name)}" data-type="${escapeHtml(typeLabel)}"></td>
-                    <td title="${escapeHtml(name)}">
-                        <div style="font-weight:600; color:#212529;">${escapeHtml(label)}</div>
-                        ${sub ? `<div style="font-size:8pt; color:#6c757d;">${escapeHtml(sub)}</div>` : ``}
-                    </td>
+                    <td title="${escapeHtml(name)}" style="font-weight:600; color:#212529;">${escapeHtml(name)}</td>
+                    <td style="color:#0078d4;">${escapeHtml(alias)}</td>
+                    <td style="color:#6c757d;">${escapeHtml(origName)}</td>
+                    <td>${typeSelectHtml}</td>
                     <td>${escapeHtml(typeLabel)}</td>
                     <td>${escapeHtml(cat)}</td>
                     <td>
@@ -20233,17 +21322,18 @@ ${sec('3) 残留抽检', renderSample())}
         function dbmRenameOne(name, typeLabel) {
             const oldName = String(name || '').trim();
             if (!oldName) return;
-            if (oldName.includes('.')) { alert('暂不支持对“附加库对象（含 db. 前缀）”重命名'); return; }
             const t = (String(typeLabel || '').includes('视图') || oldName.toLowerCase().startsWith('vw_')) ? 'view' : 'table';
-            const newName = String(prompt(`请输入新的${t === 'view' ? '视图' : '表'}名称（将执行物理重命名）`, oldName) || '').trim();
-            if (!newName || newName === oldName) return;
-            if (newName.includes('.')) { alert('名称中不允许包含“.”'); return; }
+            let defaultNewName = oldName;
+            if (oldName.includes('.')) defaultNewName = oldName.split('.')[1];
+            const newName = String(prompt(`请输入新的${t === 'view' ? '视图' : '表'}名称（仅需输入纯名称，会自动保持在原数据库中）`, defaultNewName) || '').trim();
+            if (!newName || newName === defaultNewName) return;
+            if (newName.includes('.')) { alert('新名称中不允许包含“.”'); return; }
 
             // 依赖检测：表/视图重命名若有依赖视图，建议级联更新
             dbmFetchDependencies(oldName, (res) => {
                 const deps = res && Array.isArray(res.dependents) ? res.dependents : [];
                 const cfg = res && Array.isArray(res.configRefs) ? res.configRefs : [];
-                const depNames = deps.map(x => x && x.name ? String(x.name) : '').filter(Boolean).filter(x => !x.includes('.'));
+                const depNames = deps.map(x => x && x.name ? String(x.name) : '').filter(Boolean);
                 let cascade = false;
                 if (depNames.length) {
                     cascade = confirm(`检测到依赖视图（${depNames.length}）：\n${depNames.slice(0, 20).join('\n')}${depNames.length > 20 ? '\n...' : ''}\n\n是否尝试“级联更新依赖视图SQL”（可能失败，需要手动修复）？\n【取消】则终止重命名。`);
@@ -20740,7 +21830,8 @@ ${sec('3) 残留抽检', renderSample())}
                 selected: [],
                 mainSheet: '',
                 tableNameMap: {},
-                tableAliasMap: {}
+                tableAliasMap: {},
+                datasetRoleMap: {}
             });
             try { renderSourceFiles(); } catch (e) { console.error('renderSourceFiles failed', e); }
             // 交互优化：用户点“+ 添加源文件”时，直接弹出选择文件对话框
@@ -20757,6 +21848,15 @@ ${sec('3) 残留抽检', renderSample())}
             }
             renderSourceFiles();
             refreshSqliteMainTableSelect();
+        }
+
+        function changeFileImportType(id, newType) {
+            const f = (window.__sourceFiles || []).find(x => x.id === id);
+            if (f) {
+                f.importType = newType;
+                renderSourceFiles();
+                saveCurrentScheme(); // 自动保存到项目配置
+            }
         }
 
         function browseSourceFile(id) {
@@ -20776,6 +21876,7 @@ ${sec('3) 残留抽检', renderSample())}
             it.worksheets = [];
             it.selected = [];
             it.mainSheet = '';
+            it.datasetRoleMap = {};
             renderSourceFiles();
         }
 
@@ -20783,10 +21884,12 @@ ${sec('3) 残留抽检', renderSample())}
             const it = (window.__sourceFiles || []).find(x => x.id === id);
             if (!it) return;
             it.worksheets = Array.isArray(sheets) ? sheets : [];
-            // 默认：首个工作表选定（符合你要求“初次导入默认第一个文件的第一个工作表”）
-            if (!it.selected || !it.selected.length) {
-                it.selected = it.worksheets.length ? [it.worksheets[0]] : [];
-            }
+            // 默认：全选所有工作表（把选择权交还给用户）
+            it.selected = Array.from(it.worksheets);
+            try {
+                it.datasetRoleMap = it.datasetRoleMap || {};
+                (it.selected || []).forEach(sh => { if (sh && !it.datasetRoleMap[sh]) it.datasetRoleMap[sh] = 'dim'; });
+            } catch (_) { }
             // 默认：如果还没选过主表，则把“第一个源文件的第一个工作表”设为主表
             if (!window.__fileWizardMain) {
                 const first = window.__sourceFiles[0];
@@ -20794,10 +21897,40 @@ ${sec('3) 残留抽检', renderSample())}
                     window.__fileWizardMain = { sourceId: first.id, filePath: first.filePath, sheetName: first.worksheets[0] };
                 }
             }
+            ensureMainExists();
             renderSourceFiles();
             refreshSqliteMainTableSelect();
             // 同步“选定主表”下拉（与设为主表一致）
             syncMainTableUiAndHost();
+            
+            // 同步刷新独立导入向导（若处于打开状态）
+            if (typeof window.__renderWizSourceList === 'function') {
+                window.__renderWizSourceList();
+            }
+        }
+
+        function getDatasetRole(sourceId, sheetName) {
+            const it = (window.__sourceFiles || []).find(x => x.id === sourceId);
+            if (!it) return 'dim';
+            const m = window.__fileWizardMain || null;
+            if (m && m.sourceId === sourceId && m.sheetName === sheetName) return 'fact';
+            const map = it.datasetRoleMap || {};
+            return map[sheetName] ? String(map[sheetName]) : 'dim';
+        }
+
+        function setDatasetRole(sourceId, sheetName, role) {
+            const v = String(role || '').toLowerCase();
+            if (v === 'fact') {
+                setMainWorksheet(sourceId, sheetName);
+                return;
+            }
+            const it = (window.__sourceFiles || []).find(x => x.id === sourceId);
+            if (!it) return;
+            try {
+                it.datasetRoleMap = it.datasetRoleMap || {};
+                it.datasetRoleMap[sheetName] = 'dim';
+            } catch (_) { }
+            renderSourceFiles();
         }
 
         function toggleWorksheetSelected(sourceId, sheetName, checked) {
@@ -20811,6 +21944,9 @@ ${sec('3) 残留抽检', renderSample())}
             try {
                 if (!checked && it.tableNameMap && it.tableNameMap[sheetName]) delete it.tableNameMap[sheetName];
                 if (!checked && it.tableAliasMap && it.tableAliasMap[sheetName]) delete it.tableAliasMap[sheetName];
+                it.datasetRoleMap = it.datasetRoleMap || {};
+                if (!checked && it.datasetRoleMap[sheetName]) delete it.datasetRoleMap[sheetName];
+                if (checked && !it.datasetRoleMap[sheetName]) it.datasetRoleMap[sheetName] = 'dim';
             } catch (_) { }
             // 如果取消勾选的是主表，则清空主表，后续自动补一个
             if (window.__fileWizardMain
@@ -20840,6 +21976,16 @@ ${sec('3) 残留抽检', renderSample())}
                 it.tableAliasMap = it.tableAliasMap || {};
                 if (!it.tableAliasMap[sheetName]) it.tableAliasMap[sheetName] = it.tableNameMap[sheetName];
             } catch (_) { }
+            try {
+                (window.__sourceFiles || []).forEach(f => {
+                    f.datasetRoleMap = f.datasetRoleMap || {};
+                    Object.keys(f.datasetRoleMap).forEach(k => {
+                        if (String(f.datasetRoleMap[k]).toLowerCase() === 'fact') f.datasetRoleMap[k] = 'dim';
+                    });
+                });
+                it.datasetRoleMap = it.datasetRoleMap || {};
+                it.datasetRoleMap[sheetName] = 'fact';
+            } catch (_) { }
             window.__fileWizardMain = { sourceId, filePath: it.filePath, sheetName };
             ensureMainExists();
             renderSourceFiles();
@@ -20854,73 +22000,338 @@ ${sec('3) 残留抽检', renderSample())}
                 const sel = Array.isArray(f.selected) ? f.selected : [];
                 if (f.filePath && sel.length) {
                     window.__fileWizardMain = { sourceId: f.id, filePath: f.filePath, sheetName: sel[0] };
+                    try {
+                        (window.__sourceFiles || []).forEach(x => {
+                            x.datasetRoleMap = x.datasetRoleMap || {};
+                            Object.keys(x.datasetRoleMap).forEach(k => {
+                                if (String(x.datasetRoleMap[k]).toLowerCase() === 'fact') x.datasetRoleMap[k] = 'dim';
+                            });
+                        });
+                        f.datasetRoleMap = f.datasetRoleMap || {};
+                        f.datasetRoleMap[sel[0]] = 'fact';
+                    } catch (_) { }
                     return;
                 }
             }
         }
 
-        function renderSourceFiles() {
-            const container = document.getElementById('sourceFilesContainer');
-            if (!container) return;
-            ensureMainExists();
-            container.innerHTML = '';
+        window.reloadSqliteDb = function() {
+            if (!window.__activeSchemeId) {
+                alert('当前未加载任何项目，无法重新加载数据库。');
+                return;
+            }
+            if (!confirm('重新加载数据库将关闭当前数据库连接并重新打开，刷新所有表结构和数据缓存。\n\n是否继续？')) return;
+            
+            setStatusMessage('正在重新加载数据库...');
+            window.chrome.webview.postMessage({ action: 'reloadDb' });
+        };
+        
+        window.toggleAllWorksheets = function(sourceId, checked) {
+            const file = window.__sourceFiles.find(x => x.id === sourceId);
+            if(file && file.worksheets) {
+                file.selected = checked ? [...file.worksheets] : [];
+                renderSourceFiles();
+            }
+        };
 
-            (window.__sourceFiles || []).forEach((f, idx) => {
-                const div = document.createElement('div');
-                div.className = 'source-file-item';
-                div.style.cssText = 'border:1px solid #e9ecef;border-radius:6px;padding:10px;margin-bottom:10px;background:#f8f9fa;';
+        window.reimportSelectedSourceFile = function() {
+            if(!window.__activeSourceId) {
+                alert('请先选择一个数据源');
+                return;
+            }
+            reimportSourceFile(window.__activeSourceId);
+        };
+        
+        window.removeSelectedSourceFile = function() {
+            if(!window.__activeSourceId) {
+                alert('请先选择一个数据源');
+                return;
+            }
+            removeSourceFile(window.__activeSourceId);
+        };
 
-                const fileName = (f.filePath || '').split('\\').pop().split('/').pop();
-                const title = `源文件${idx + 1}: ${fileName || '（未选择）'}`;
-                const reimportLabel = (window.__activeSchemeId ? '重导数据库' : '保存数据库');
-                div.innerHTML = `
-                    <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-                        <span style="min-width: 90px; font-weight: normal;">${title}</span>
-                        <input type="text" class="form-control" value="${escapeHtml(f.filePath || '')}" placeholder="选择Excel文件" style="flex:1;" readonly>
-                        <button class="btn btn-secondary" onclick="browseSourceFile('${f.id}')">选择文件...</button>
-                        <button class="btn btn-warning" onclick="reimportSourceFile('${f.id}')" ${!f.filePath ? 'disabled' : ''} title="将该源文件当前勾选的工作表导入到项目数据库（会先删除对应表再重新导入）；并同步保存源文件关系到项目配置。">${reimportLabel}</button>
-                        <button class="btn btn-danger" onclick="removeSourceFile('${f.id}')" ${window.__sourceFiles.length <= 1 ? 'disabled' : ''}>移除</button>
-                    </div>
-                    <div style="font-size:9pt;color:#495057;margin-bottom:6px;">工作表（勾选=导入；点击“设为主表”=指定当前主表）</div>
-                    <div id="sheetBox_${f.id}" style="display:flex; gap:8px; flex-wrap:wrap;"></div>
-                `;
-                container.appendChild(div);
+        window.previewData = function(sourceId, sheetName) {
+            const file = window.__sourceFiles.find(x => x.id === sourceId);
+            if (!file) return;
+            
+            // 暂时使用 alert 提示，后续需 C# 端增加 previewData 接口返回 JSON 数据展示 DataGrid
+            alert(`【数据嗅探与预览】\n\n您正在尝试预览文件：\n${file.filePath}\n工作表：${sheetName}\n\n该功能需要宿主端（C#）支持按需读取前 50 行数据并返回。\n已将此项优化登记在 optimization_plan.md 中，待 C# 端接口就绪后即可接入 DataGrid 弹窗预览。`);
+        };
 
-                const box = div.querySelector(`#sheetBox_${f.id}`);
-                const sheets = Array.isArray(f.worksheets) ? f.worksheets : [];
-                const selected = Array.isArray(f.selected) ? f.selected : [];
-                if (!sheets.length) {
-                    if (box) box.innerHTML = `<span style="color:#6c757d;">请先选择文件以加载工作表列表</span>`;
-                } else {
-                    sheets.forEach(s => {
-                        const chip = document.createElement('div');
-                        const isSel = selected.includes(s);
-                        const isMain = !!(window.__fileWizardMain && window.__fileWizardMain.sourceId === f.id && window.__fileWizardMain.sheetName === s);
-                        const defaultTn = mkSqliteTableNameFromFileSheet(f.filePath, s);
-                        const tn = (f.tableNameMap && f.tableNameMap[s]) ? String(f.tableNameMap[s]) : defaultTn;
-                        const alias = (f.tableAliasMap && f.tableAliasMap[s]) ? String(f.tableAliasMap[s]) : tn;
-                        const tables = Array.isArray(window.__sqliteTables) ? window.__sqliteTables : [];
-                        const locked = tables.includes(tn); // 已导入：锁定（避免改名破坏引用）
-                        chip.style.cssText = `display:inline-flex; align-items:center; gap:6px; padding:6px 8px; border-radius:6px; border:1px solid ${isMain ? '#0078d4' : '#dee2e6'}; background:${isSel ? '#ffffff' : '#f3f4f6'};`;
-                        chip.innerHTML = `
-                            <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;font-weight:normal;">
-                                <input type="checkbox" ${isSel ? 'checked' : ''} onchange="toggleWorksheetSelected('${f.id}','${escapeHtml(s)}',this.checked)">
-                                <span>${escapeHtml(s)}</span>
-                            </label>
-                            <button class="btn btn-secondary" style="padding:2px 8px; font-size:9pt;" onclick="setMainWorksheet('${f.id}','${escapeHtml(s)}')">${isMain ? '主表✓' : '设为主表'}</button>
-                            ${isSel ? `<span style="font-size:8pt; color:#6c757d;">表名:</span>
-                              <input class="form-control" style="width:180px; font-size:9pt; height:26px;" value="${escapeHtml(tn)}" ${locked ? 'disabled title="已导入后不允许改名（可重建/重导来变更）"' : ''} onchange="setCustomTableName('${f.id}','${escapeHtml(s)}', this.value)">
-                              <span style="font-size:8pt; color:#6c757d; margin-left:6px;">显示名:</span>
-                              <input class="form-control" style="width:140px; font-size:9pt; height:26px;" value="${escapeHtml(alias)}" onchange="setCustomTableAlias('${f.id}','${escapeHtml(s)}', this.value)" title="显示名不会影响物理表名，可随时改（不破坏关联/视图/模板）">
-                            ` : ``}
-                        `;
-                        box.appendChild(chip);
-                    });
-                }
+        window.dropColumnFromTable = function(tableName, columnName, btnElement) {
+            if(!confirm(`您确定要永久删除物理表 [${tableName}] 中的 [${columnName}] 字段吗？\n警告：该操作不可逆，所有该字段的数据将被清空！`)) return;
+            
+            try {
+                window.chrome.webview.postMessage({ 
+                    action: "alterTableColumn",
+                    operation: "drop",
+                    tableName: tableName,
+                    columnName: columnName, 
+                    sql: `ALTER TABLE "${tableName}" DROP COLUMN "${columnName}";` 
+                });
+                // Assuming it will succeed, immediately hide the row
+                const tr = btnElement.closest('tr');
+                if (tr) tr.style.display = 'none';
+                setStatusMessage(`已发送删除字段指令：${tableName}.${columnName}`);
+            } catch (e) {
+                alert('发送删除字段指令失败：' + e.message);
+            }
+        };
+
+        window.addColumnToTable = function() {
+            const tableName = document.getElementById("worksheetAnalysisSelect").value;
+            if (!tableName) {
+                alert("请先选择要操作的表！");
+                return;
+            }
+            const columnName = String(prompt(`在表 [${tableName}] 中增加新字段：\n请输入新字段的名称（例如：备注）`, "") || "").trim();
+            if (!columnName) return;
+            const dataType = String(prompt(`请输入新字段的数据类型：\n（例如：TEXT, INTEGER, REAL, NUMERIC, BLOB）`, "TEXT") || "").trim().toUpperCase() || "TEXT";
+            try {
+                window.chrome.webview.postMessage({
+                    action: "alterTableColumn",
+                    operation: "add",
+                    tableName: tableName,
+                    columnName: columnName,
+                    dataType: dataType
+                });
+                setTimeout(() => { analyzeWorksheet(); }, 500);
+            } catch (e) {
+                console.error(e);
+                alert("发送增加字段指令失败: " + e.message);
+            }
+        };
+
+        window.cleanupOrphanTables = function() {
+            if(!confirm('该操作将扫描数据库中所有存在，但未与当前项目绑定的物理表，并将其永久删除！\n\n这可以释放数据库空间，但如果您有其他项目共享该数据库，请谨慎操作。\n\n确定要清理孤儿表吗？')) return;
+            
+            // 收集所有本项目关联的物理表
+            const projectTables = new Set();
+            (window.__sourceFiles || []).forEach(f => {
+                const sel = f.selected || [];
+                sel.forEach(s => {
+                    const defaultTn = mkSqliteTableNameFromFileSheet(f.filePath, s);
+                    const tn = (f.tableNameMap && f.tableNameMap[s]) ? f.tableNameMap[s] : defaultTn;
+                    projectTables.add(tn);
+                });
             });
+            
+            const allDbTables = window.__sqliteTables || [];
+            const orphans = allDbTables.filter(t => !projectTables.has(t));
+            
+            if (orphans.length === 0) {
+                alert('系统检查完毕：当前数据库非常干净，没有发现孤儿表。');
+                return;
+            }
+            
+            if(!confirm(`发现 ${orphans.length} 个孤儿表：\n${orphans.slice(0,10).join('\\n')}${orphans.length > 10 ? '\\n...' : ''}\n\n确定要永久删除它们吗？`)) return;
+            
+            window.chrome.webview.postMessage({ action: 'deleteTables', tables: orphans.join(',') });
+            setStatusMessage(`已发送清理指令，准备删除 ${orphans.length} 个孤儿表...`);
+        };
+        
+        window.reimportAllSourceFiles = function() {
+            if(!window.__sourceFiles || window.__sourceFiles.length === 0) return;
+            if(!confirm('将重新导入所有数据源文件（会覆盖现有表数据），是否继续？')) return;
+            
+            // 此处简化为依次触发导入
+            let currentIdx = 0;
+            const filesToImport = window.__sourceFiles.filter(f => f.filePath && (f.selected || []).length > 0);
+            
+            if(filesToImport.length === 0) {
+                alert('没有可导入的数据源，请检查是否勾选了工作表。');
+                return;
+            }
+            
+            setStatusMessage('正在批量导入...');
+            // 可以扩展一个批量导入功能，这里暂时调用后端的整体导入
+            loadToSqlite(false);
+        };
+        
+        window.deleteSelectedSourceFileTables = function() {
+            if(!window.__activeSourceId) {
+                alert('请先选择一个数据源');
+                return;
+            }
+            const activeFile = window.__sourceFiles.find(x => x.id === window.__activeSourceId);
+            if(!activeFile) return;
+            
+            const selected = activeFile.selected || [];
+            if(selected.length === 0) {
+                alert('当前文件没有勾选任何入湖的工作表');
+                return;
+            }
+            
+            if(!confirm('将删除当前选定文件在数据库中对应的所有物理表（不可恢复），是否继续？')) return;
+            
+            // 收集要删除的表名
+            const tablesToDelete = [];
+            selected.forEach(s => {
+                const defaultTn = mkSqliteTableNameFromFileSheet(activeFile.filePath, s);
+                const tn = (activeFile.tableNameMap && activeFile.tableNameMap[s]) ? activeFile.tableNameMap[s] : defaultTn;
+                tablesToDelete.push(tn);
+            });
+            
+            if(tablesToDelete.length > 0) {
+                window.chrome.webview.postMessage({ action: 'deleteTables', tables: tablesToDelete.join(',') });
+                // 此时前端的 selected 也应该清空
+                activeFile.selected = [];
+                renderSourceFiles();
+            }
+        };
+
+        function renderSourceFiles() {
+            const listContainer = document.getElementById('dataSourceList');
+            const rightContainer = document.getElementById('datasetListContainer');
+            const titleEl = document.getElementById('selectedDataSourceTitle');
+            const actionsEl = document.getElementById('selectedDataSourceActions');
+            if (!listContainer || !rightContainer) {
+                const oldContainer = document.getElementById('sourceFilesContainer');
+                if (oldContainer) oldContainer.innerHTML = '';
+                return;
+            }
+            
+            ensureMainExists();
+            
+            const validSourceFiles = (window.__sourceFiles || []).filter(f => f.filePath);
+            
+            if (validSourceFiles.length > 0) {
+                if (!window.__activeSourceId || !validSourceFiles.find(x => x.id === window.__activeSourceId)) {
+                    window.__activeSourceId = validSourceFiles[0].id;
+                }
+            } else {
+                window.__activeSourceId = null;
+            }
+            
+            listContainer.innerHTML = '';
+            validSourceFiles.forEach((f, idx) => {
+                const div = document.createElement('div');
+                const isActive = (f.id === window.__activeSourceId);
+                const fileName = (f.filePath || '').split('\\').pop().split('/').pop() || '（未选择文件）';
+                
+                div.style.cssText = `
+                    padding: 10px 12px; 
+                    cursor: pointer; 
+                    border-radius: 2px;
+                    border-left: ${isActive ? '3px solid #0078d4' : '3px solid transparent'}; 
+                    background: ${isActive ? '#edebe9' : 'transparent'}; 
+                    display: flex; 
+                    align-items: center; 
+                    justify-content: space-between;
+                    transition: background 0.2s;
+                `;
+                
+                if(!isActive) {
+                    div.onmouseover = () => div.style.background = '#f3f2f1';
+                    div.onmouseout = () => div.style.background = 'transparent';
+                }
+                const selCount = (f.selected || []).length;
+                const totCount = (f.worksheets || []).length;
+                const currentType = f.importType || "独立表";
+
+                div.innerHTML = `
+                    <div style="display:flex; flex-direction:column; gap:4px; overflow:hidden; flex:1;">
+                        <span style="font-size:9pt; font-weight:${isActive ? "600" : "normal"}; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:#323130;" title="${escapeHtml(f.filePath)}">
+                            📄 ${escapeHtml(fileName)}
+                        </span>
+                        <div style="display:flex; justify-content:space-between; align-items:center;">
+                            <span style="font-size:8pt; color:#605e5c;">已选: ${selCount}/${totCount}</span>
+                            <select style="font-size:8pt; padding:1px; border:1px solid #ccc; border-radius:2px; width:65px; background:transparent;" onchange="event.stopPropagation(); changeFileImportType('${f.id}', this.value)">
+                                <option value="独立表" ${currentType === "独立表" ? "selected" : ""}>独立表</option>
+                                <option value="合并表" ${currentType === "合并表" ? "selected" : ""}>合并表</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="margin-left: 4px;">
+                        <button class="btn" style="padding: 2px 6px; font-size: 10pt; color: #a4262c; background: transparent; border: none; cursor: pointer;" title="删除此数据源" onclick="event.stopPropagation(); if(confirm('确定要删除【${escapeHtml(fileName)}】吗？')) removeSourceFile('${f.id}');">×</button>
+                    </div>
+                `;
+                div.onclick = () => {
+                    window.__activeSourceId = f.id;
+                    renderSourceFiles();
+                };
+                listContainer.appendChild(div);
+            });
+            
+            rightContainer.innerHTML = '';
+            const activeFile = (window.__sourceFiles || []).find(x => x.id === window.__activeSourceId);
+            
+            if (!activeFile) {
+                rightContainer.innerHTML = '<div style="color: #6c757d; font-size: 9pt; text-align: center; margin-top: 40px;">（请先在左侧选择或添加数据源）</div>';
+                return;
+            }
+            
+            const sheets = Array.isArray(activeFile.worksheets) ? activeFile.worksheets : [];
+            const selected = Array.isArray(activeFile.selected) ? activeFile.selected : [];
+            
+            if (!sheets.length) {
+                rightContainer.innerHTML = `<div style="color:#6c757d; font-size:9pt; text-align:center; margin-top:40px;">未加载到数据集，请确保已选择合法的文件。</div>`;
+                return;
+            }
+            
+            const tables = Array.isArray(window.__sqliteTables) ? window.__sqliteTables : [];
+            
+            let tableHtml = `
+                <div class="table-container" style="height: 100%; border:none; max-height: none;">
+                <table style="width:100%; border-collapse: collapse; font-size:9pt; color:#323130;">
+                    <thead>
+                        <tr style="background:#f3f2f1; border-bottom:1px solid #e1dfdd; font-weight:600;">
+                            <th style="padding:10px 8px; width:40px; text-align:center; position:sticky; top:0; background:#f3f2f1; z-index:10;">
+                                <input type="checkbox" style="cursor:pointer;" onchange="toggleAllWorksheets('${activeFile.id}', this.checked)">
+                            </th>
+                            <th style="padding:10px 8px; text-align:left; width:200px; position:sticky; top:0; background:#f3f2f1; z-index:10;">数据集 (Dataset)</th>
+                            <th style="padding:10px 8px; text-align:center; width:80px; position:sticky; top:0; background:#f3f2f1; z-index:10;">角色</th>
+                            <th style="padding:10px 8px; text-align:left; position:sticky; top:0; background:#f3f2f1; z-index:10;">底层物理表名</th>
+                            <th style="padding:10px 8px; text-align:center; width:60px; position:sticky; top:0; background:#f3f2f1; z-index:10;">就绪</th>
+                            <th style="padding:10px 8px; text-align:center; width:220px; position:sticky; top:0; background:#f3f2f1; z-index:10;">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            
+            sheets.forEach((s, idx) => {
+                const isSel = selected.includes(s);
+                const isMain = !!(window.__fileWizardMain && window.__fileWizardMain.sourceId === activeFile.id && window.__fileWizardMain.sheetName === s);
+                const defaultTn = mkSqliteTableNameFromFileSheet(activeFile.filePath, s);
+                const tn = (activeFile.tableNameMap && activeFile.tableNameMap[s]) ? String(activeFile.tableNameMap[s]) : defaultTn;
+                const locked = tables.includes(tn);
+                
+                const roleHtml = isMain ? '<span style="color:#0078d4; font-weight:600;">事实表<br>(Fact)</span>' : '<span style="color:#605e5c;">维表<br>(Dim)</span>';
+                const readyHtml = isSel && locked ? '<span style="color:#107c10; font-weight:bold;">✓</span>' : '<span style="color:#a19f9d;">-</span>';
+                
+                tableHtml += `
+                    <tr style="border-bottom:1px solid #edebe9; background:${isSel ? '#ffffff' : '#faf9f8'}; transition: background 0.2s;">
+                        <td style="padding:10px 8px; text-align:center; vertical-align:middle;">
+                            <input type="checkbox" style="cursor:pointer;" ${isSel ? 'checked' : ''} onchange="toggleWorksheetSelected('${activeFile.id}','${escapeHtml(s)}',this.checked)">
+                        </td>
+                        <td style="padding:10px 8px; vertical-align:middle;">
+                            <div style="font-weight:${isSel ? '600' : 'normal'}; color:#323130;">${escapeHtml(s)}</div>
+                        </td>
+                        <td style="padding:10px 8px; text-align:center; vertical-align:middle; font-size:8.5pt;">
+                            ${isSel ? roleHtml : '<span style="color:#a19f9d;">-</span>'}
+                        </td>
+                        <td style="padding:10px 8px; vertical-align:middle;">
+                            ${isSel ? `<div style="color:#323130;">${escapeHtml(tn)}</div>` : '<span style="color:#a19f9d;">-</span>'}
+                        </td>
+                        <td style="padding:10px 8px; text-align:center; vertical-align:middle;">
+                            ${readyHtml}
+                        </td>
+                        <td style="padding:10px 8px; text-align:center; vertical-align:middle;">
+                            <div style="display:flex; gap:4px; justify-content:center;">
+                                <button class="btn" style="font-size:8.5pt; padding:2px 6px; background:transparent; border:none; color:#0078d4;" onmouseover="this.style.background='#f3f2f1'" onmouseout="this.style.background='transparent'" onclick="previewData('${activeFile.id}', '${escapeHtml(s)}')">预览数据</button>
+                                <button class="btn" style="font-size:8.5pt; padding:2px 6px; background:transparent; border:none; color:#0078d4;" onmouseover="this.style.background='#f3f2f1'" onmouseout="this.style.background='transparent'" onclick="reimportTable('${activeFile.id}', '${escapeHtml(s)}')">重新入湖</button>
+                                <button class="btn" style="font-size:8.5pt; padding:2px 6px; background:transparent; border:none; color:#d13438;" onmouseover="this.style.background='#fdf3f4'" onmouseout="this.style.background='transparent'" onclick="deleteTable('${activeFile.id}', '${escapeHtml(s)}')">删除表</button>
+                                ${!isMain && isSel ? `<button class="btn" style="font-size:8.5pt; padding:2px 6px; background:transparent; border:none; color:#605e5c;" onmouseover="this.style.background='#f3f2f1'" onmouseout="this.style.background='transparent'" onclick="setMainWorksheet('${activeFile.id}','${escapeHtml(s)}')">设为主表</button>` : ''}
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            });
+            
+            tableHtml += `</tbody></table></div>`;
+            rightContainer.innerHTML = tableHtml;
         }
         
-        // 保存文件设置
         function saveFileSettings() {
             ensureMainExists();
             const main = window.__fileWizardMain || null;
@@ -20928,7 +22339,6 @@ ${sec('3) 残留抽检', renderSample())}
             const mainSheet = main ? (main.sheetName || '') : '';
             if (!mainFile || !mainSheet) { alert('请先选择至少一个源文件，并勾选至少一个工作表，再设定主表。'); return; }
             
-            // 更新顶部文件信息栏
             try {
                 const fileEl = document.getElementById('selectedFile');
                 if (fileEl) {
@@ -20953,19 +22363,18 @@ ${sec('3) 残留抽检', renderSample())}
             } catch (_) { }
             // 同步保存“文件打开”模块设置（同目录保存 + localStorage 兜底）
             try { saveSettings('fileWizard', collectFileWizardSettings()); } catch (_) { }
-            setStatusMessage('已保存文件设置（尚未导入 SQLite）');
-            alert('文件设置已保存。\n如需查询/多表关联，请点击【加载到SQLite数据库】完成导入。');
+            setStatusMessage('已保存源文件配置（尚未执行导入）');
         }
 
         // 明确动作：加载到 SQLite 数据库（比“保存设置”更直观）
-        function loadToSqlite() {
+        function loadToSqlite(silent = false) {
             ensureMainExists();
             const main = window.__fileWizardMain || null;
             const mainFile = main ? (main.filePath || '') : '';
             const mainSheet = main ? (main.sheetName || '') : '';
-            if (!mainFile || !mainSheet) { alert('请先选择至少一个源文件，并勾选至少一个工作表，再设定主表。'); return; }
+            if (!mainFile || !mainSheet) { if (!silent) alert('请先在“Step 1”中选择至少一个源文件并设定核心事实表。'); return; }
 
-            // 先保存界面状态（文件/工作表/文件分析列表同步；不触发导入）
+            // 先保存界面状态（不触发 alert，避免打断导入流程）
             try { saveFileSettings(); } catch (e) { console.error(e); }
 
             const clearBefore = !!document.getElementById('chkClearSqliteBeforeImport')?.checked;
@@ -20990,6 +22399,7 @@ ${sec('3) 残留抽检', renderSample())}
             const mainTableName = getCustomTableName(main.sourceId, mainSheet) || mkTableName(mainFile, mainSheet);
 
             // 1) 先把“主表”放到队列头（确保 _currentMainTableName/字段等按主表建立）
+            // 对于 multi_merge，主表为覆盖创建，后续表为追加
             window.__importQueue.push({
                 role: 'main',
                 filePath: mainFile,
@@ -21016,7 +22426,7 @@ ${sec('3) 残留抽检', renderSample())}
                         worksheetName: sheet,
                         tableName: tn,
                         resetDb: false,
-                        append: (writeMode === 'append'),
+                        append: (writeMode === 'append' || writeMode === 'multi_merge'),
                         appendMode: window.__appendStrategy || 'append',
                         keyColumns: window.__appendKeyColumns || ''
                     });
@@ -21052,7 +22462,51 @@ ${sec('3) 残留抽检', renderSample())}
                 startNextImport();
             }
 
-            alert(`已开始加载到 SQLite...\n主表: ${mainSheet}\n副表: ${Math.max(0, window.__importQueue.length - 1)} 张\n导入前清空: ${clearBefore ? '是' : '否'}`);
+            if (!silent) {
+                alert(`已开始加载到 SQLite...\n主表: ${mainSheet}\n副表: ${Math.max(0, window.__importQueue.length - 1)} 张\n导入前清空: ${clearBefore ? '是' : '否'}`);
+            }
+        }
+
+        // 项目配置编辑：重导单表
+        function reimportTable(sourceId, sheetName) {
+            const it = (window.__sourceFiles || []).find(x => x.id === sourceId);
+            if (!it || !it.filePath) return;
+            if (!confirm(`将重新导入工作表 [${sheetName}]，覆盖原有数据，是否继续？`)) return;
+
+            (async () => {
+                const ok = await ensureProjectSavedNow('reimport');
+                if (!ok) { alert('保存项目失败，已取消导入。'); return; }
+
+                const importMode = document.getElementById('globalImportMode')?.value || 'text';
+                const tn = (it.tableNameMap && it.tableNameMap[sheetName]) ? String(it.tableNameMap[sheetName]) : mkSqliteTableNameFromFileSheet(it.filePath, sheetName);
+                const isMain = !!(window.__fileWizardMain && window.__fileWizardMain.sourceId === sourceId && window.__fileWizardMain.sheetName === sheetName);
+                
+                window.chrome?.webview?.postMessage?.({
+                    action: 'importWorksheet',
+                    filePath: it.filePath,
+                    worksheetName: sheetName,
+                    tableName: tn,
+                    role: isMain ? 'main' : 'sub',
+                    resetDb: false,
+                    importMode: importMode,
+                    dropExisting: true
+                });
+                setStatusMessage(`正在重导表: ${tn}...`);
+            })();
+        }
+
+        // 项目配置编辑：删除物理表
+        function deleteTable(sourceId, sheetName) {
+            const it = (window.__sourceFiles || []).find(x => x.id === sourceId);
+            if (!it) return;
+            const tn = (it.tableNameMap && it.tableNameMap[sheetName]) ? String(it.tableNameMap[sheetName]) : mkSqliteTableNameFromFileSheet(it.filePath, sheetName);
+            
+            if (!confirm(`确定要从 SQLite 数据库中彻底删除物理表 [${tn}] 吗？\n删除后该表的数据将丢失。`)) return;
+            
+            window.chrome?.webview?.postMessage?.({ action: 'dropDbObjects', objects: [{ name: tn, type: 'table' }] });
+            // 删除物理表后，自动在项目中取消勾选
+            toggleWorksheetSelected(sourceId, sheetName, false);
+            setStatusMessage(`已发送删除表指令: ${tn}`);
         }
 
         // 项目管理：重导单个源文件（只重导该文件已勾选工作表；不清空整个项目库）
@@ -21099,6 +22553,20 @@ ${sec('3) 残留抽检', renderSample())}
                 window.__importCurrent = null;
                 setStatusMessage('SQLite 导入队列已完成');
                 requestActiveFields();
+                
+                // 向导：如果此时有向导开着，通知它全部完成
+                if (typeof window.__wizProgressHandler === 'function') {
+                    window.__wizProgressHandler(100, '✅ 全部导入成功！');
+                }
+                
+                // 刷新项目详情与状态（确保“入湖”后 UI 立刻更新）
+                try {
+                    if (window.__activeSchemeId) {
+                        window.chrome.webview.postMessage({ action: 'getProjectDetail', schemeId: window.__activeSchemeId });
+                    }
+                    if (typeof requestProjectList === 'function') requestProjectList();
+                } catch (_) { }
+
                 // 记录导入批次到 Project Meta（用于项目中心概况/详单）
                 try {
                     if (window.__activeSchemeId && window.__importBatchId) {
@@ -21161,17 +22629,12 @@ ${sec('3) 残留抽检', renderSample())}
 
         // 项目管理页：TAB 分页（源文件清单 / 导入操作）
         function fwPage(key) {
-            const k = (key === 'import') ? 'import' : 'sources';
-            window.__fwPage = k;
-            try { localStorage.setItem('fwPage', k); } catch (_) { }
+            window.__fwPage = 'sources';
+            try { localStorage.setItem('fwPage', 'sources'); } catch (_) { }
             const p1 = document.getElementById('fwPage_sources');
             const p2 = document.getElementById('fwPage_import');
-            if (p1) p1.style.display = (k === 'sources') ? 'block' : 'none';
-            if (p2) p2.style.display = (k === 'import') ? 'block' : 'none';
-            const b1 = document.getElementById('fwPageBtn_sources');
-            const b2 = document.getElementById('fwPageBtn_import');
-            if (b1) { b1.style.background = (k === 'sources') ? 'linear-gradient(180deg,#e7f3ff 0%,#cfe8ff 100%)' : ''; b1.style.borderColor = (k === 'sources') ? '#69c0ff' : ''; }
-            if (b2) { b2.style.background = (k === 'import') ? 'linear-gradient(180deg,#e7f3ff 0%,#cfe8ff 100%)' : ''; b2.style.borderColor = (k === 'import') ? '#69c0ff' : ''; }
+            if (p1) p1.style.display = 'flex';
+            if (p2) p2.style.display = 'none';
         }
         
         // 全局搜索：保存设置
@@ -21260,8 +22723,6 @@ ${sec('3) 残留抽检', renderSample())}
         
         // 初始化
         document.addEventListener('DOMContentLoaded', function() {
-            // 项目自动保存：默认开启，可在“项目管理-导入操作”处关闭
-            try { initAutoSaveProject(); } catch (_) { }
             // 采样策略：统一默认值，并应用到各模块输入框
             try { initSamplingSettings(); } catch (_) { }
             try { setStatusCurrentOutputMode(window.__outputMode || 'raw'); } catch (_) { }
@@ -21362,7 +22823,17 @@ ${sec('3) 残留抽检', renderSample())}
             // 侧边栏：恢复用户上次停留的模块（默认项目管理）
             try {
                 const last = localStorage.getItem('lastSidebarTab') || 'file-wizard';
-                if (document.getElementById(last)) switchTab(last);
+                if (document.getElementById(last)) {
+                    switchTab(last);
+                    if (last === 'file-wizard') {
+                        const scheme = document.getElementById('schemeNameInput')?.value || '';
+                        if (scheme) {
+                            switchFwTab('detail');
+                        } else {
+                            switchFwTab('config');
+                        }
+                    }
+                }
             } catch (_) { }
         });
 

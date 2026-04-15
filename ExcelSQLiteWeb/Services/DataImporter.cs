@@ -8,12 +8,12 @@ using ExcelSQLiteWeb.Models;
 namespace ExcelSQLiteWeb.Services;
 
 /// <summary>
-/// 数据导入器：
+/// Excel 数据导入器（适配 IDataImporter 接口）
 /// - 使用 ExcelDataReader 流式读取（比 EPPlus 逐单元格快很多）
 /// - 支持两种导入模式：全列文本 / 智能转换+失败统计
 /// - 支持“追加导入”（append=true）：目标表存在时不重建表，仅追加写入（支持源字段新增：自动加列）
 /// </summary>
-public class DataImporter
+public class DataImporter : IDataImporter
 {
     private readonly ExcelAnalyzer _excelAnalyzer;
     private readonly SqliteManager _sqliteManager;
@@ -22,6 +22,72 @@ public class DataImporter
     {
         _excelAnalyzer = excelAnalyzer;
         _sqliteManager = sqliteManager;
+    }
+
+    public bool CanHandle(string filePath)
+    {
+        if (string.IsNullOrWhiteSpace(filePath)) return false;
+        var ext = Path.GetExtension(filePath).ToLowerInvariant();
+        return ext == ".xlsx" || ext == ".xls" || ext == ".xlsm" || ext == ".csv";
+    }
+
+    public string Kind => "excel";
+
+    public IEnumerable<DatasetInfo> ListDatasets(string filePath)
+    {
+        if (!File.Exists(filePath)) yield break;
+        
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = ExcelReaderFactory.CreateReader(stream);
+        
+        do
+        {
+            yield return new DatasetInfo(reader.Name, reader.Name, null);
+        } while (reader.NextResult());
+    }
+
+    public DatasetSchema GetSchema(string filePath, string datasetId)
+    {
+        var schema = new DatasetSchema { DatasetId = datasetId };
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = ExcelReaderFactory.CreateReader(stream);
+
+        if (!MoveToSheet(reader, datasetId))
+            return schema;
+
+        if (reader.Read() && reader.FieldCount > 0)
+        {
+            var colNames = ReadHeaderFromReader(reader);
+            // 默认全文本（为简化适配，若需智能推断可调用原有 InferColumnTypesBySampling）
+            schema.Columns = colNames.Select(n => new DatasetSchema.ColumnDef { Name = n, SqliteType = "TEXT" }).ToList();
+        }
+        return schema;
+    }
+
+    public async IAsyncEnumerable<RowData> ReadRowsAsync(string filePath, string datasetId, ImportOptions options)
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        using var reader = ExcelReaderFactory.CreateReader(stream);
+
+        if (!MoveToSheet(reader, datasetId))
+            yield break;
+
+        if (options.HasHeader)
+            reader.Read(); // 跳过表头
+
+        int colCount = reader.FieldCount;
+        while (reader.Read())
+        {
+            var row = new RowData { Values = new object?[colCount] };
+            for (int i = 0; i < colCount; i++)
+            {
+                row.Values[i] = reader.GetValue(i);
+            }
+            yield return row;
+        }
     }
 
     public Task<ImportResult> ImportWorksheetAsync(
@@ -367,47 +433,53 @@ public class DataImporter
         int inserted = 0;
 
         using var conn = _sqliteManager.Connection;
-        using var tx = conn.BeginTransaction();
-
-        string colSql = string.Join(", ", columnNames.Select(n => SqliteManager.QuoteIdent(n)));
-        string paramSql = string.Join(", ", columnNames.Select((_, i) => $"@p{i}"));
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = $"INSERT INTO {SqliteManager.QuoteIdent(tableName)} ({colSql}) VALUES ({paramSql});";
-        cmd.Transaction = tx;
-        for (int i = 0; i < colCount; i++) cmd.Parameters.Add(new SqliteParameter($"@p{i}", DBNull.Value));
-
-        int batch = 0;
-        for (int r = 0; r < rows.Count; r++)
+        SqliteTransaction? tx = conn.BeginTransaction();
+        try
         {
-            ct.ThrowIfCancellationRequested();
-            var arr = rows[r];
-            for (int i = 0; i < colCount; i++)
-            {
-                var v = (arr.Length > i) ? arr[i] : null;
-                if (!smart)
-                {
-                    cmd.Parameters[i].Value = v == null || v == DBNull.Value ? DBNull.Value : Convert.ToString(v, CultureInfo.InvariantCulture) ?? "";
-                }
-                else
-                {
-                    if (v != null && v != DBNull.Value && !string.IsNullOrWhiteSpace(Convert.ToString(v, CultureInfo.InvariantCulture))) stats.NonEmpty(i);
-                    var (ok, val) = ConvertSmart(v, columns[i].DataType);
-                    if (ok) stats.Ok(i); else stats.Fail(i, v);
-                    cmd.Parameters[i].Value = val ?? DBNull.Value;
-                }
-            }
-            cmd.ExecuteNonQuery();
-            inserted++;
-            batch++;
-            if (batch >= 5000)
-            {
-                batch = 0;
-                progress?.Report(new ImportProgress { Stage = "导入数据", Percentage = 20, CurrentRow = startRowNumber + r, TotalRows = 0 });
-            }
-        }
-        tx.Commit();
+            string colSql = string.Join(", ", columnNames.Select(n => SqliteManager.QuoteIdent(n)));
+            string paramSql = string.Join(", ", columnNames.Select((_, i) => $"@p{i}"));
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"INSERT INTO {SqliteManager.QuoteIdent(tableName)} ({colSql}) VALUES ({paramSql});";
+            cmd.Transaction = tx;
+            for (int i = 0; i < colCount; i++) cmd.Parameters.Add(new SqliteParameter($"@p{i}", DBNull.Value));
 
-        return inserted;
+            int batch = 0;
+            for (int r = 0; r < rows.Count; r++)
+            {
+                ct.ThrowIfCancellationRequested();
+                var arr = rows[r];
+                for (int i = 0; i < colCount; i++)
+                {
+                    var v = (arr.Length > i) ? arr[i] : null;
+                    if (!smart)
+                    {
+                        cmd.Parameters[i].Value = v == null || v == DBNull.Value ? DBNull.Value : Convert.ToString(v, CultureInfo.InvariantCulture) ?? "";
+                    }
+                    else
+                    {
+                        if (v != null && v != DBNull.Value && !string.IsNullOrWhiteSpace(Convert.ToString(v, CultureInfo.InvariantCulture))) stats.NonEmpty(i);
+                        var (ok, val) = ConvertSmart(v, columns[i].DataType);
+                        if (ok) stats.Ok(i); else stats.Fail(i, v);
+                        cmd.Parameters[i].Value = val ?? DBNull.Value;
+                    }
+                }
+                cmd.ExecuteNonQuery();
+                inserted++;
+                batch++;
+                if (batch >= 5000)
+                {
+                    batch = 0;
+                    progress?.Report(new ImportProgress { Stage = "导入数据", Percentage = 20, CurrentRow = startRowNumber + r, TotalRows = 0 });
+                }
+            }
+            tx?.Commit();
+
+            return inserted;
+        }
+        finally
+        {
+            tx?.Dispose();
+        }
     }
 
     private int BulkInsertRemaining(
@@ -425,52 +497,69 @@ public class DataImporter
         int inserted = 0;
 
         using var conn = _sqliteManager.Connection;
-        using var tx = conn.BeginTransaction();
-
-        string colSql = string.Join(", ", columnNames.Select(n => SqliteManager.QuoteIdent(n)));
-        string paramSql = string.Join(", ", columnNames.Select((_, i) => $"@p{i}"));
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = $"INSERT INTO {SqliteManager.QuoteIdent(tableName)} ({colSql}) VALUES ({paramSql});";
-        cmd.Transaction = tx;
-        for (int i = 0; i < colCount; i++) cmd.Parameters.Add(new SqliteParameter($"@p{i}", DBNull.Value));
-
-        int rowNum = startRowNumber;
-        int batch = 0;
-        while (reader.Read())
+        SqliteTransaction? tx = conn.BeginTransaction();
+        try
         {
-            ct.ThrowIfCancellationRequested();
-            for (int i = 0; i < colCount; i++)
+            string colSql = string.Join(", ", columnNames.Select(n => SqliteManager.QuoteIdent(n)));
+            string paramSql = string.Join(", ", columnNames.Select((_, i) => $"@p{i}"));
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"INSERT INTO {SqliteManager.QuoteIdent(tableName)} ({colSql}) VALUES ({paramSql});";
+            cmd.Transaction = tx;
+            for (int i = 0; i < colCount; i++) cmd.Parameters.Add(new SqliteParameter($"@p{i}", DBNull.Value));
+
+            int rowNum = startRowNumber;
+            int batch = 0;
+            int reportBatch = 0;
+            while (reader.Read())
             {
-                var v = reader.GetValue(i);
-                if (!smart)
+                ct.ThrowIfCancellationRequested();
+                for (int i = 0; i < colCount; i++)
                 {
-                    cmd.Parameters[i].Value = v == null || v == DBNull.Value ? DBNull.Value : Convert.ToString(v, CultureInfo.InvariantCulture) ?? "";
-                }
-                else
-                {
-                    var (ok, val) = ConvertSmart(v, columns[i].DataType);
-                    if (stats != null)
+                    var v = reader.GetValue(i);
+                    if (!smart)
                     {
-                        if (v != null && v != DBNull.Value && !string.IsNullOrWhiteSpace(Convert.ToString(v, CultureInfo.InvariantCulture))) stats.NonEmpty(i);
-                        if (ok) stats.Ok(i); else stats.Fail(i, v);
+                        cmd.Parameters[i].Value = v == null || v == DBNull.Value ? DBNull.Value : Convert.ToString(v, CultureInfo.InvariantCulture) ?? "";
                     }
-                    cmd.Parameters[i].Value = val ?? DBNull.Value;
+                    else
+                    {
+                        var (ok, val) = ConvertSmart(v, columns[i].DataType);
+                        if (stats != null)
+                        {
+                            if (v != null && v != DBNull.Value && !string.IsNullOrWhiteSpace(Convert.ToString(v, CultureInfo.InvariantCulture))) stats.NonEmpty(i);
+                            if (ok) stats.Ok(i); else stats.Fail(i, v);
+                        }
+                        cmd.Parameters[i].Value = val ?? DBNull.Value;
+                    }
+                }
+                cmd.ExecuteNonQuery();
+                inserted++;
+                batch++;
+                rowNum++;
+                reportBatch++;
+
+                if (batch >= 10000)
+                {
+                    tx?.Commit();
+                    tx?.Dispose();
+                    tx = conn.BeginTransaction();
+                    cmd.Transaction = tx;
+                    batch = 0;
+                }
+                
+                if (reportBatch >= 5000)
+                {
+                    reportBatch = 0;
+                    progress?.Report(new ImportProgress { Stage = "导入数据", Percentage = Math.Min(99, 20 + (inserted / 10000)), CurrentRow = rowNum, TotalRows = 0 });
                 }
             }
-            cmd.ExecuteNonQuery();
-            inserted++;
-            batch++;
-            rowNum++;
+            tx?.Commit();
 
-            if (batch >= 5000)
-            {
-                batch = 0;
-                progress?.Report(new ImportProgress { Stage = "导入数据", Percentage = 20, CurrentRow = rowNum, TotalRows = 0 });
-            }
+            return inserted;
         }
-        tx.Commit();
-
-        return inserted;
+        finally
+        {
+            tx?.Dispose();
+        }
     }
 
     private static (bool ok, object? value) ConvertSmart(object? v, string targetType)

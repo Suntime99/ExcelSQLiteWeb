@@ -20,7 +20,7 @@ public partial class Form1 : Form
 {
     private ExcelAnalyzer? _excelAnalyzer;
     private SqliteManager? _sqliteManager;
-    private DataImporter? _dataImporter;
+    private readonly List<IDataImporter> _importers = new();
     private QueryEngine? _queryEngine;
     private StatisticsEngine? _statisticsEngine;
     private SplitEngine? _splitEngine;
@@ -36,7 +36,7 @@ public partial class Form1 : Form
     private readonly HashSet<string> _maskedShadowViews = new(StringComparer.OrdinalIgnoreCase);
     private CancellationTokenSource? _enumArchiveCts;
     private string _webHtmlContentCache = "";
-    private string _webBootUserMode = "normal"; // normal/expert（宿主注入给前端，用于“reload 切换”）
+    private string _webBootUserMode = "expert"; // normal/expert（宿主注入给前端，用于“reload 切换”）
     private string? _webBootUserModeScriptId = null;
     private string? _webHtmlPathCache = null; // 若从磁盘加载，则保存 file path，便于 reload/诊断
     private string? _webBaseDirCache = null;
@@ -101,6 +101,8 @@ public partial class Form1 : Form
     private string? _lastMainFilePath;
     // 当前“主表”在 SQLite 内存库中的真实表名（默认兼容 Main）
     private string? _currentMainTableName;
+    private string? _lastBatchLogPath;
+    private string? _lastBatchOutputPath;
 
     // ==================== 项目管理（DataConfig，位于主程序目录） ====================
     // 说明：
@@ -267,6 +269,7 @@ public partial class Form1 : Form
     private sealed class RecentSchemesStore
     {
         public string? LastSchemeId { get; set; }
+        public string? UserMode { get; set; } // normal/expert（用于启动默认模式）
         public List<SchemeMeta> Schemes { get; set; } = new();
     }
 
@@ -339,6 +342,7 @@ public partial class Form1 : Form
         public List<string> Sheets { get; set; } = new();
         public Dictionary<string, string> TableNameMap { get; set; } = new(StringComparer.OrdinalIgnoreCase);
         public Dictionary<string, string> TableAliasMap { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+        public Dictionary<string, string> DatasetRoleMap { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     }
 
     private sealed class ImportBatchV1
@@ -1037,13 +1041,36 @@ VALUES
         if (!doc.RootElement.TryGetProperty("sources", out var sources) || sources.ValueKind != System.Text.Json.JsonValueKind.Array)
             return list;
 
+        var mainSourceId = "";
+        var mainFilePath = "";
+        var mainSheetName = "";
+        try
+        {
+            if (doc.RootElement.TryGetProperty("main", out var main) && main.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                mainSourceId = (main.TryGetProperty("sourceId", out var sid) && sid.ValueKind == System.Text.Json.JsonValueKind.String) ? (sid.GetString() ?? "") : "";
+                mainFilePath = (main.TryGetProperty("filePath", out var mfp) && mfp.ValueKind == System.Text.Json.JsonValueKind.String) ? (mfp.GetString() ?? "") : "";
+                mainSheetName = (main.TryGetProperty("sheetName", out var shn) && shn.ValueKind == System.Text.Json.JsonValueKind.String) ? (shn.GetString() ?? "") : "";
+            }
+        }
+        catch { }
+
         foreach (var s in sources.EnumerateArray())
         {
+            var id = (s.TryGetProperty("id", out var idEl) ? idEl.GetString() : null) ?? "";
             var fp = (s.TryGetProperty("filePath", out var fpEl) ? fpEl.GetString() : null) ?? "";
             if (string.IsNullOrWhiteSpace(fp)) continue;
             var sheets = new List<string>();
-            if (s.TryGetProperty("sheets", out var sh) && sh.ValueKind == System.Text.Json.JsonValueKind.Array)
-                sheets = sh.EnumerateArray().Select(x => x.GetString() ?? "").Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+            try
+            {
+                if (s.TryGetProperty("selected", out var sel) && sel.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    sheets = sel.EnumerateArray().Select(x => x.GetString() ?? "").Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+                else if (s.TryGetProperty("worksheets", out var ws) && ws.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    sheets = ws.EnumerateArray().Select(x => x.GetString() ?? "").Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+                else if (s.TryGetProperty("sheets", out var sh) && sh.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    sheets = sh.EnumerateArray().Select(x => x.GetString() ?? "").Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+            }
+            catch { }
             var tnMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
             try
             {
@@ -1072,8 +1099,43 @@ VALUES
                 }
             }
             catch { }
+            var roleMap = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                if (s.TryGetProperty("datasetRoleMap", out var rm) && rm.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    foreach (var p in rm.EnumerateObject())
+                    {
+                        var k = p.Name ?? "";
+                        var v = p.Value.ValueKind == System.Text.Json.JsonValueKind.String ? (p.Value.GetString() ?? "") : p.Value.ToString();
+                        if (!string.IsNullOrWhiteSpace(k) && !string.IsNullOrWhiteSpace(v)) roleMap[k] = v;
+                    }
+                }
+            }
+            catch { }
             bool isMain = (s.TryGetProperty("isMain", out var im) && im.ValueKind == System.Text.Json.JsonValueKind.True) ||
                           (s.TryGetProperty("role", out var role) && string.Equals(role.GetString(), "main", StringComparison.OrdinalIgnoreCase));
+            if (!isMain)
+            {
+                if (!string.IsNullOrWhiteSpace(mainSourceId) && !string.IsNullOrWhiteSpace(id) && string.Equals(mainSourceId, id, StringComparison.OrdinalIgnoreCase))
+                    isMain = true;
+                else if (!string.IsNullOrWhiteSpace(mainFilePath) && string.Equals(mainFilePath.Replace('\\', '/'), fp.Replace('\\', '/'), StringComparison.OrdinalIgnoreCase))
+                    isMain = true;
+            }
+            try
+            {
+                foreach (var sh in sheets)
+                {
+                    if (string.IsNullOrWhiteSpace(sh)) continue;
+                    if (!roleMap.ContainsKey(sh)) roleMap[sh] = "dim";
+                }
+                if (isMain && !string.IsNullOrWhiteSpace(mainSheetName))
+                {
+                    if (!roleMap.ContainsKey(mainSheetName)) roleMap[mainSheetName] = "fact";
+                    else roleMap[mainSheetName] = "fact";
+                }
+            }
+            catch { }
 
             long size = 0, ticks = 0;
             try
@@ -1095,7 +1157,8 @@ VALUES
                 IsMain = isMain,
                 Sheets = sheets,
                 TableNameMap = tnMap,
-                TableAliasMap = taMap
+                TableAliasMap = taMap,
+                DatasetRoleMap = roleMap
             });
         }
         return list;
@@ -1733,6 +1796,7 @@ VALUES
             var json = File.ReadAllText(path, Encoding.UTF8);
             var store = System.Text.Json.JsonSerializer.Deserialize<RecentSchemesStore>(json) ?? new RecentSchemesStore();
             _activeSchemeId = string.IsNullOrWhiteSpace(store.LastSchemeId) ? null : store.LastSchemeId;
+            _webBootUserMode = string.IsNullOrWhiteSpace(store.UserMode) ? "expert" : ToMode(store.UserMode);
             if (store.Schemes != null)
                 _schemes.AddRange(store.Schemes.Where(s => !string.IsNullOrWhiteSpace(s.Id)));
 
@@ -1763,6 +1827,7 @@ VALUES
             var store = new RecentSchemesStore
             {
                 LastSchemeId = _activeSchemeId,
+                UserMode = ToMode(_webBootUserMode),
                 Schemes = _schemes
                     .OrderByDescending(s => s.LastOpenTime)
                     .Take(_maxSchemesKeep)
@@ -1976,7 +2041,9 @@ VALUES
     {
         _excelAnalyzer = new ExcelAnalyzer();
         _sqliteManager = new SqliteManager(); // 内存数据库
-        _dataImporter = new DataImporter(_excelAnalyzer, _sqliteManager);
+        _importers.Clear();
+        _importers.Add(new DataImporter(_excelAnalyzer!, _sqliteManager));
+        _importers.Add(new CsvImporter(_sqliteManager));
         _queryEngine = new QueryEngine(_sqliteManager);
         _statisticsEngine = new StatisticsEngine(_sqliteManager);
         _splitEngine = new SplitEngine(_sqliteManager, _excelAnalyzer);
@@ -2631,7 +2698,10 @@ VALUES
                 case "executeSqlEditor":
                     ExecuteSqlEditor(data);
                     break;
-                    case "setUserModeAndReload":
+                case "alterTableColumn":
+                    AlterTableColumn(data);
+                    break;
+                case "setUserModeAndReload":
                         SetUserModeAndReloadAsync(data);
                         break;
                     case "toggleUserMode":
@@ -2707,11 +2777,17 @@ VALUES
                     break;
                 case "openBatchLog":
                     System.Diagnostics.Debug.WriteLine("Opening batch log");
-                    SendMessageToWebView(new { action = "error", message = "批量处理：打开日志暂未实现（批量引擎未接入）" });
+                    if (!string.IsNullOrWhiteSpace(_lastBatchLogPath) && File.Exists(_lastBatchLogPath))
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = _lastBatchLogPath, UseShellExecute = true });
+                    else
+                        SendMessageToWebView(new { action = "error", message = "未找到批量处理日志文件" });
                     break;
                 case "openBatchOutputFolder":
                     System.Diagnostics.Debug.WriteLine("Opening batch output folder");
-                    SendMessageToWebView(new { action = "error", message = "批量处理：打开输出文件夹暂未实现（批量引擎未接入）" });
+                    if (!string.IsNullOrWhiteSpace(_lastBatchOutputPath) && Directory.Exists(_lastBatchOutputPath))
+                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = _lastBatchOutputPath, UseShellExecute = true });
+                    else
+                        SendMessageToWebView(new { action = "error", message = "未找到批量处理输出目录" });
                     break;
                 case "openPath":
                     OpenPath(data);
@@ -2726,7 +2802,7 @@ VALUES
                     GenerateChart(data);
                     break;
                 case "executeBatchProcess":
-                    SendMessageToWebView(new { action = "error", message = "批量处理：当前版本暂未实现（前端预留，后端未接入）" });
+                    ExecuteBatchProcessAsync(data);
                     break;
                 case "executePersonalDataMasking":
                 case "executeEnterpriseDataMasking":
@@ -2743,6 +2819,35 @@ VALUES
         }
     }
 
+    private async void ExecuteBatchProcessAsync(System.Text.Json.JsonElement data)
+    {
+        try
+        {
+            if (!data.TryGetProperty("settings", out var settings))
+            {
+                SendMessageToWebView(new { action = "error", message = "批量处理：缺少配置参数" });
+                return;
+            }
+
+            var batchEngine = new Services.BatchEngine(_sqliteManager!, (pct, msg) =>
+            {
+                SendMessageToWebView(new { action = "batchProgress", percent = pct, message = msg });
+            });
+
+            var result = await batchEngine.ExecuteBatchAsync(settings);
+            
+            _lastBatchLogPath = result.LogPath;
+            _lastBatchOutputPath = result.OutputPath;
+
+            SendMessageToWebView(new { action = "batchCompleted", results = result });
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"ExecuteBatchProcessAsync error: {ex.Message}");
+            SendMessageToWebView(new { action = "error", message = $"批量处理异常: {ex.Message}" });
+        }
+    }
+
     private async void SetUserModeAndReloadAsync(System.Text.Json.JsonElement data)
     {
         try
@@ -2755,6 +2860,7 @@ VALUES
                 ?? "normal";
 
             _webBootUserMode = string.Equals(mode, "expert", StringComparison.OrdinalIgnoreCase) ? "expert" : "normal";
+            try { SaveRecentSchemesToDisk(); } catch { }
 
             // 通过 DocumentCreated 脚本注入启动模式，然后整体 reload
             try { await EnsureBootUserModeScriptAsync(); } catch { }
@@ -3861,7 +3967,9 @@ VALUES
         _sqliteManager.Open();
 
         // 依赖服务重新指向新的连接
-        _dataImporter = new DataImporter(_excelAnalyzer!, _sqliteManager);
+        _importers.Clear();
+        _importers.Add(new DataImporter(_excelAnalyzer!, _sqliteManager));
+        _importers.Add(new CsvImporter(_sqliteManager));
         _queryEngine = new QueryEngine(_sqliteManager);
         _statisticsEngine = new StatisticsEngine(_sqliteManager);
         _splitEngine = new SplitEngine(_sqliteManager, _excelAnalyzer!);
@@ -4489,7 +4597,21 @@ VALUES
                 var list = new List<object>();
 
                 IEnumerable<string> files = Enumerable.Empty<string>();
-                if (string.Equals(scope, "folder", StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(scope, "files", StringComparison.OrdinalIgnoreCase))
+                {
+                    var filePaths = new List<string>();
+                    if (data.TryGetProperty("filePaths", out var fps) && fps.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var f in fps.EnumerateArray())
+                        {
+                            var s = f.GetString();
+                            if (!string.IsNullOrWhiteSpace(s) && File.Exists(s)) filePaths.Add(s);
+                        }
+                    }
+                    if (filePaths.Count == 0) throw new FileNotFoundException("项目源文件清单为空或文件不存在");
+                    files = filePaths;
+                }
+                else if (string.Equals(scope, "folder", StringComparison.OrdinalIgnoreCase))
                 {
                     if (string.IsNullOrWhiteSpace(folderPath) || !Directory.Exists(folderPath))
                         throw new DirectoryNotFoundException("请选择有效的文件夹路径");
@@ -5914,8 +6036,8 @@ SELECT
             }
             string mode = (data.TryGetProperty("mode", out var mo) ? mo.GetString() : null) ?? "open"; // open/saveas
 
-            // 收集所有“单字段”的 table.column
-            var cols = new List<(string Table, string Col)>();
+            // 收集所有“单字段或组合字段”的 table.columns
+            var cols = new List<(string Table, string[] Cols)>();
             foreach (var el in resultsEl.EnumerateArray())
             {
                 if (!el.TryGetProperty("leftTable", out var lt) || !el.TryGetProperty("rightTable", out var rt)) continue;
@@ -5930,13 +6052,16 @@ SELECT
                 if (el.TryGetProperty("rightColumns", out var rc) && rc.ValueKind == System.Text.Json.JsonValueKind.Array)
                     rightCols.AddRange(rc.EnumerateArray().Select(x => x.GetString() ?? "").Where(x => !string.IsNullOrWhiteSpace(x)));
 
-                if (leftCols.Count == 1) cols.Add((leftTable, leftCols[0]));
-                if (rightCols.Count == 1) cols.Add((rightTable, rightCols[0]));
+                if (leftCols.Count > 0) cols.Add((leftTable, leftCols.ToArray()));
+                if (rightCols.Count > 0) cols.Add((rightTable, rightCols.ToArray()));
             }
-            cols = cols.Distinct().ToList();
+            // 去重
+            cols = cols.GroupBy(x => $"{x.Table}::" + string.Join(",", x.Cols))
+                       .Select(g => g.First())
+                       .ToList();
             if (cols.Count == 0)
             {
-                SendMessageToWebView(new { action = "error", message = "没有可导出的单字段枚举值（组合字段暂不支持全量导出）" });
+                SendMessageToWebView(new { action = "error", message = "没有可导出的枚举值数据" });
                 return;
             }
             bool openAfter = string.Equals(mode, "open", StringComparison.OrdinalIgnoreCase);
@@ -5956,34 +6081,55 @@ SELECT
             }
 
             using var wb = new ClosedXML.Excel.XLWorkbook();
-            foreach (var (table, col) in cols.Take(120)) // 防炸：最多 120 个字段导出
+            foreach (var (table, colArray) in cols.Take(120)) // 防炸：最多 120 个关系导出
             {
-                var sheetName = $"{table}.{col}";
+                var colNames = string.Join("_", colArray);
+                var sheetName = $"{table}.{colNames}";
                 // Excel sheet 名限制 31
                 sheetName = sheetName.Length > 31 ? sheetName.Substring(0, 31) : sheetName;
                 // 去非法字符
                 foreach (var ch in new[] { ':', '\\', '/', '?', '*', '[', ']' })
                     sheetName = sheetName.Replace(ch, '_');
                 if (string.IsNullOrWhiteSpace(sheetName)) sheetName = "Enums";
-                if (wb.Worksheets.Any(w => string.Equals(w.Name, sheetName, StringComparison.OrdinalIgnoreCase)))
-                    sheetName = sheetName.Substring(0, Math.Min(28, sheetName.Length)) + "_" + wb.Worksheets.Count;
+                
+                int suffix = 1;
+                string baseName = sheetName;
+                while (wb.Worksheets.Any(w => string.Equals(w.Name, sheetName, StringComparison.OrdinalIgnoreCase)))
+                {
+                    string sufStr = $"_{suffix}";
+                    sheetName = baseName.Substring(0, Math.Min(31 - sufStr.Length, baseName.Length)) + sufStr;
+                    suffix++;
+                }
 
                 var ws = wb.AddWorksheet(sheetName);
                 ApplyExcelReportDefaults(ws);
-                ws.Cell(1, 1).Value = "value";
-                ws.Cell(1, 1).Style.Font.Bold = true;
-                ws.Cell(1, 1).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.FromHtml("#343a40");
-                ws.Cell(1, 1).Style.Font.FontColor = ClosedXML.Excel.XLColor.White;
+                
+                for (int i = 0; i < colArray.Length; i++)
+                {
+                    ws.Cell(1, i + 1).Value = colArray[i];
+                    ws.Cell(1, i + 1).Style.Font.Bold = true;
+                    ws.Cell(1, i + 1).Style.Fill.BackgroundColor = ClosedXML.Excel.XLColor.FromHtml("#343a40");
+                    ws.Cell(1, i + 1).Style.Font.FontColor = ClosedXML.Excel.XLColor.White;
+                }
 
                 string qt = SqliteManager.QuoteIdent(table);
-                string qc = SqliteManager.QuoteIdent(col);
-                var rows = _sqliteManager.Query($"SELECT DISTINCT CAST({qc} AS TEXT) AS v FROM {qt} WHERE {qc} IS NOT NULL");
+                var selectParts = colArray.Select((c, idx) => $"CAST({SqliteManager.QuoteIdent(c)} AS TEXT) AS v{idx}");
+                var selectSql = string.Join(", ", selectParts);
+                
+                var whereParts = colArray.Select(c => $"{SqliteManager.QuoteIdent(c)} IS NOT NULL");
+                var whereSql = string.Join(" AND ", whereParts);
+
+                var rows = _sqliteManager.Query($"SELECT DISTINCT {selectSql} FROM {qt} WHERE {whereSql}");
                 int r = 2;
                 foreach (var rr in rows)
                 {
                     if (r > 1048576) break; // Excel 行上限
-                    if (rr.TryGetValue("v", out var v) && v != null)
-                        ws.Cell(r++, 1).Value = v.ToString();
+                    for (int i = 0; i < colArray.Length; i++)
+                    {
+                        if (rr.TryGetValue($"v{i}", out var v) && v != null)
+                            ws.Cell(r, i + 1).Value = v.ToString();
+                    }
+                    r++;
                 }
                 try { ApplyTextLeftNumberRightAlignment(ws, headerRow: 1); } catch { }
                 ws.Columns().AdjustToContents();
@@ -6147,9 +6293,16 @@ SELECT
                 (data.TryGetProperty("importMode", out var im) ? im.GetString() : null)
                 ?? "text";
 
-            if (string.IsNullOrEmpty(filePath) || _dataImporter == null)
+            if (string.IsNullOrEmpty(filePath))
             {
                 SendMessageToWebView(new { action = "error", message = "请先选择文件" });
+                return;
+            }
+
+            var importer = _importers.FirstOrDefault(i => i.CanHandle(filePath));
+            if (importer == null)
+            {
+                SendMessageToWebView(new { action = "error", message = $"不支持的文件格式: {Path.GetFileName(filePath)}" });
                 return;
             }
 
@@ -6221,7 +6374,7 @@ SELECT
 
             if (!needStagingMerge)
             {
-                result = await _dataImporter.ImportWorksheetAsync(
+                result = await importer.ImportWorksheetAsync(
                     filePath,
                     worksheetName,
                     tableName: tableName,
@@ -6241,7 +6394,7 @@ SELECT
 
                 var stg = $"__stg_{ShortHash(tableName)}_{DateTime.Now:HHmmss}";
                 // 1) 导入到临时表（覆盖写入）
-                var stgRes = await _dataImporter.ImportWorksheetAsync(
+                var stgRes = await importer.ImportWorksheetAsync(
                     filePath,
                     worksheetName,
                     tableName: stg,
@@ -6429,9 +6582,10 @@ SELECT
                     SendMessageToWebView(new { action = "error", message = "请先选择Excel文件" });
                     return;
                 }
-                if (_dataImporter == null)
+                var importer = _importers.FirstOrDefault(i => i.CanHandle(_currentFilePath));
+                if (importer == null)
                 {
-                    SendMessageToWebView(new { action = "error", message = "数据导入器未初始化" });
+                    SendMessageToWebView(new { action = "error", message = "数据导入器不支持该文件格式" });
                     return;
                 }
 
@@ -6455,14 +6609,16 @@ SELECT
                 x = System.Text.RegularExpressions.Regex.Replace(x, @"/\*[\s\S]*?\*/", "");
                 return x;
             }
+            bool selectLike = IsSelectLike(sql);
+
+            // 检查是否包含多个语句（通过简单分号判断）
             static bool IsSingleStatement(string s)
             {
                 var t = (s ?? string.Empty).Trim();
                 t = System.Text.RegularExpressions.Regex.Replace(t, @";+\s*$", ""); // trim trailing ;
                 return !t.Contains(';');
             }
-
-            bool selectLike = IsSelectLike(sql);
+            bool isMultiStmt = !IsSingleStatement(sql);
 
             // SQL实验室：非 SELECT 写入/DDL —— 专家模式 + 事务（提交/回滚）
             if (string.Equals(source, "sql-editor", StringComparison.OrdinalIgnoreCase) && !selectLike)
@@ -6470,11 +6626,6 @@ SELECT
                 if (!expertMode)
                 {
                     SendMessageToWebView(new { action = "error", message = "当前未开启【专家模式】，不允许执行写入/DDL。", hasErrorLog = false, requestId, source });
-                    return;
-                }
-                if (!IsSingleStatement(sql))
-                {
-                    SendMessageToWebView(new { action = "error", message = "SQL实验室暂不支持多语句执行（请拆分后分别执行）。", hasErrorLog = false, requestId, source });
                     return;
                 }
 
@@ -6539,9 +6690,10 @@ SELECT
             {
                 var trimmed0 = (sql ?? string.Empty).TrimStart();
                 bool isPageable =
-                    trimmed0.StartsWith("select", StringComparison.OrdinalIgnoreCase)
+                    !isMultiStmt &&
+                    (trimmed0.StartsWith("select", StringComparison.OrdinalIgnoreCase)
                     || trimmed0.StartsWith("with", StringComparison.OrdinalIgnoreCase)
-                    || trimmed0.StartsWith("explain", StringComparison.OrdinalIgnoreCase);
+                    || trimmed0.StartsWith("explain", StringComparison.OrdinalIgnoreCase));
                 if (isPageable && pageSize > 0)
                 {
                     var sqlNoSemi = sql.Trim().TrimEnd(';');
@@ -6879,7 +7031,7 @@ SELECT
     {
         try
         {
-            if (_sqliteManager == null || _dataImporter == null)
+            if (_sqliteManager == null || !_importers.Any())
             {
                 SendMessageToWebView(new { action = "error", message = "SQLite/导入器未初始化" });
                 return;
@@ -6889,6 +7041,13 @@ SELECT
                 SendMessageToWebView(new { action = "error", message = "请先选择主表文件" });
                 return;
             }
+            var importer = _importers.FirstOrDefault(i => i.CanHandle(_currentFilePath));
+            if (importer == null)
+            {
+                SendMessageToWebView(new { action = "error", message = "数据导入器不支持该文件格式" });
+                return;
+            }
+
             if (!data.TryGetProperty("settings", out var settings))
             {
                 SendMessageToWebView(new { action = "error", message = "比对参数缺失" });
@@ -6913,7 +7072,7 @@ SELECT
             string beforeTable = "__CompareBefore";
             _sqliteManager.Execute($"DROP TABLE IF EXISTS [{beforeTable}];");
             var progress = new Progress<ImportProgress>(_ => { });
-            var r = _dataImporter.ImportWorksheetAsync(_currentFilePath, beforeSheet, beforeTable, "text", progress, CancellationToken.None).GetAwaiter().GetResult();
+            var r = importer.ImportWorksheetAsync(_currentFilePath, beforeSheet, beforeTable, "text", progress, CancellationToken.None).GetAwaiter().GetResult();
             if (!r.Success) throw new InvalidOperationException(r.Message);
 
             var beforeSchema = _sqliteManager.GetTableSchema(beforeTable);
@@ -7047,6 +7206,11 @@ SELECT
             }
 
             var table = MainTableNameOrDefault();
+            if (data.TryGetProperty("dataSource", out var ds) && ds.ValueKind == System.Text.Json.JsonValueKind.String)
+            {
+                var dsStr = ds.GetString();
+                if (!string.IsNullOrWhiteSpace(dsStr)) table = dsStr;
+            }
 
             // 仅实现：最多 1 个列字段（多列字段可在前端用拼接字段实现）
             string? colField = colFields.FirstOrDefault();
@@ -7528,18 +7692,21 @@ SELECT
         var tableNames = ExtractTableNamesFromSql(sql);
         if (tableNames.Count == 0) return;
 
+        var importer = _importers.FirstOrDefault(i => i.CanHandle(filePath));
+        if (importer == null) throw new InvalidOperationException($"数据导入器不支持该文件格式: {filePath}");
+
         foreach (var table in tableNames)
         {
             if (_excelSqliteImportedTables.Contains(table)) continue;
 
-            SendMessageToWebView(new { action = "importProgressUpdate", stage = $"Excel→SQLite 导入 {table}", percent = 0 });
+            SendMessageToWebView(new { action = "importProgressUpdate", stage = $"文件→SQLite 导入 {table}", percent = 0 });
 
             var progress = new Progress<ImportProgress>(p =>
             {
-                SendMessageToWebView(new { action = "importProgressUpdate", stage = $"Excel→SQLite 导入 {table}", percent = p.Percentage });
+                SendMessageToWebView(new { action = "importProgressUpdate", stage = $"文件→SQLite 导入 {table}", percent = p.Percentage });
             });
 
-            var r = await _dataImporter!.ImportWorksheetAsync(
+            var r = await importer.ImportWorksheetAsync(
                 filePath,
                 worksheetName: table,
                 tableName: table,           // 关键：表名=工作表名
@@ -7744,12 +7911,24 @@ SELECT
                 }
                 var t0 = San(tableName);
                 var c0 = string.Join("_", columns.Take(3).Select(San));
-                indexName = $"idx_{t0}_{c0}";
-                if (indexName.Length > 60) indexName = indexName.Substring(0, 60);
+                
+                // 优化：不再使用生硬截断，而是截断后加上字段名的短 Hash，避免同名冲突被 IF NOT EXISTS 吞没
+                var hashPart = "";
+                try
+                {
+                    using var md5 = System.Security.Cryptography.MD5.Create();
+                    var bs = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(string.Join(",", columns)));
+                    hashPart = "_" + string.Concat(bs.Take(3).Select(b => b.ToString("x2")));
+                }
+                catch { hashPart = "_" + Guid.NewGuid().ToString("N").Substring(0, 6); }
+                
+                var baseName = $"idx_{t0}_{c0}";
+                if (baseName.Length > 40) baseName = baseName.Substring(0, 40);
+                indexName = baseName + hashPart;
             }
 
             var colsSql = string.Join(", ", columns.Select(SqliteManager.QuoteIdent));
-            var sql = $"CREATE {(unique ? "UNIQUE " : "")}INDEX IF NOT EXISTS {SqliteManager.QuoteIdent(indexName)} ON {SqliteManager.QuoteIdent(tableName)} ({colsSql});";
+            var sql = $"CREATE {(unique ? "UNIQUE " : "")}INDEX {SqliteManager.QuoteIdent(indexName)} ON {SqliteManager.QuoteIdent(tableName)} ({colsSql});";
             _sqliteManager.Execute(sql);
             try { _sqliteManager.Execute($"ANALYZE {SqliteManager.QuoteIdent(tableName)};"); } catch { }
 
@@ -9025,6 +9204,55 @@ SELECT
         }
     }
 
+    private void AlterTableColumn(JsonElement data)
+    {
+        try
+        {
+            if (_sqliteManager == null)
+            {
+                SendMessageToWebView(new { action = "error", message = "SQLite管理器未初始化" });
+                return;
+            }
+
+            var operation = data.GetProperty("operation").GetString() ?? ""; // "add" or "drop"
+            var tableName = data.GetProperty("tableName").GetString() ?? "";
+            var columnName = data.GetProperty("columnName").GetString() ?? "";
+            var dataType = data.TryGetProperty("dataType", out var dt) ? dt.GetString() ?? "TEXT" : "TEXT";
+            
+            tableName = tableName.Trim();
+            columnName = columnName.Trim();
+            
+            if (string.IsNullOrWhiteSpace(tableName) || string.IsNullOrWhiteSpace(columnName))
+            {
+                SendMessageToWebView(new { action = "error", message = "表名或列名不能为空" });
+                return;
+            }
+
+            // SQLite 支持 DROP COLUMN 从 3.35.0 开始。如果有语法错误会直接抛出。
+            string sql = "";
+            if (operation.Equals("add", StringComparison.OrdinalIgnoreCase))
+            {
+                sql = $"ALTER TABLE {SqliteManager.QuoteIdent(tableName)} ADD COLUMN {SqliteManager.QuoteIdent(columnName)} {dataType};";
+            }
+            else if (operation.Equals("drop", StringComparison.OrdinalIgnoreCase))
+            {
+                sql = $"ALTER TABLE {SqliteManager.QuoteIdent(tableName)} DROP COLUMN {SqliteManager.QuoteIdent(columnName)};";
+            }
+            else
+            {
+                SendMessageToWebView(new { action = "error", message = $"未知的列操作: {operation}" });
+                return;
+            }
+
+            _sqliteManager.Execute(sql);
+            SendMessageToWebView(new { action = "success", message = "操作成功" });
+        }
+        catch (Exception ex)
+        {
+            SendMessageToWebView(new { action = "error", message = $"修改表结构失败: {ex.Message}" });
+        }
+    }
+
     private void RenameDbObject(JsonElement data)
     {
         try
@@ -9079,28 +9307,39 @@ SELECT
             }
             catch { }
 
-            // 先保守：不支持对附加库对象（含 alias. 前缀）做 rename
-            if (oldName.Contains('.') || newName.Contains('.'))
+            // 支持附加库对象：解析 schema 前缀
+            string schema = "main";
+            string oldBaseName = oldName;
+            if (oldName.Contains('.'))
             {
-                Fail("暂不支持对“附加库对象（含 db. 前缀）”重命名，请先在对应库内处理。");
-                return;
+                var parts = oldName.Split('.', 2);
+                schema = parts[0];
+                oldBaseName = parts[1];
             }
+            
+            // 强制规范 newName：不允许带前缀（始终保持在原来的 schema 中）
+            string newBaseName = newName;
+            if (newName.Contains('.'))
+            {
+                newBaseName = newName.Split('.', 2)[1];
+            }
+            string fullNewName = schema == "main" ? newBaseName : $"{schema}.{newBaseName}";
 
             // 检查是否已存在
-            if (_sqliteManager.TableExists(newName))
+            if (_sqliteManager.TableExists(fullNewName))
             {
-                Fail($"重命名失败：目标名称已存在：{newName}");
+                Fail($"重命名失败：目标名称已存在：{fullNewName}");
                 return;
             }
 
-            // 依赖视图：由前端先做依赖分析后传入（可选；仅支持 main 里的视图名）
+            // 依赖视图：由前端先做依赖分析后传入
             var dependents = new List<string>();
             if (data.TryGetProperty("dependents", out var depArr) && depArr.ValueKind == JsonValueKind.Array)
             {
                 foreach (var it in depArr.EnumerateArray())
                 {
                     var dn = (it.GetString() ?? "").Trim();
-                    if (!string.IsNullOrWhiteSpace(dn) && !dn.Contains('.')) dependents.Add(dn);
+                    if (!string.IsNullOrWhiteSpace(dn)) dependents.Add(dn);
                 }
             }
 
@@ -9118,7 +9357,16 @@ SELECT
                 {
                     foreach (var dn in dependents)
                     {
-                        var r2 = _sqliteManager.Query("SELECT sql FROM sqlite_master WHERE type='view' AND name=@name LIMIT 1;", new { name = dn });
+                        string depSchema = "main";
+                        string depName = dn;
+                        if (dn.Contains('.'))
+                        {
+                            var parts = dn.Split('.', 2);
+                            depSchema = parts[0];
+                            depName = parts[1];
+                        }
+                        
+                        var r2 = _sqliteManager.Query($"SELECT sql FROM {SqliteManager.QuoteIdent(depSchema)}.sqlite_master WHERE type='view' AND name=@name LIMIT 1;", new { name = depName });
                         var s2 = r2.FirstOrDefault()?["sql"]?.ToString() ?? "";
                         if (!string.IsNullOrWhiteSpace(s2)) depSql[dn] = s2;
                     }
@@ -9128,22 +9376,25 @@ SELECT
                     }
                 }
 
-                _sqliteManager.Execute($"ALTER TABLE {SqliteManager.QuoteIdent(oldName)} RENAME TO {SqliteManager.QuoteIdent(newName)};");
+                _sqliteManager.Execute($"ALTER TABLE {SqliteManager.QuoteIdent(oldName)} RENAME TO {SqliteManager.QuoteIdent(newBaseName)};");
 
                 try
                 {
                     if (!string.IsNullOrWhiteSpace(_currentMainTableName) && string.Equals(_currentMainTableName, oldName, StringComparison.OrdinalIgnoreCase))
-                        _currentMainTableName = newName;
+                        _currentMainTableName = fullNewName;
                 }
                 catch { }
 
                 if (cascade && depSql.Count > 0)
                 {
-                    // 更新依赖视图 SQL：把 oldName 的引用替换为 newName（含 [old]）
+                    // 更新依赖视图 SQL：把 oldName 的引用替换为 fullNewName
                     string ReplaceRef(string s)
                     {
                         if (string.IsNullOrWhiteSpace(s)) return s;
-                        return ReplaceSqlIdentifier(s, oldName, newName);
+                        // 注意：如果原 SQL 中带有 schema 前缀，需要做复杂匹配；此处假设统一用 baseName 替换或全名替换
+                        var res = ReplaceSqlIdentifier(s, oldName, fullNewName);
+                        if (schema != "main") res = ReplaceSqlIdentifier(res, oldBaseName, fullNewName);
+                        return res;
                     }
 
                     var pending = depSql.Select(kv => new KeyValuePair<string, string>(kv.Key, ReplaceRef(kv.Value))).ToList();
@@ -9180,9 +9431,10 @@ SELECT
                     return;
                 }
 
-                // 生成新视图 SQL（替换 CREATE VIEW 头部）
+                // 生成新视图 SQL（替换 CREATE VIEW 头部，确保在同一 schema 内重建）
                 var re = new System.Text.RegularExpressions.Regex(@"(?is)^\\s*CREATE\\s+VIEW\\s+(?:IF\\s+NOT\\s+EXISTS\\s+)?(.+?)\\s+AS\\s+", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                var newSql = re.Replace(sql, $"CREATE VIEW {SqliteManager.QuoteIdent(newName)} AS ", 1);
+                var viewNameForCreate = schema == "main" ? SqliteManager.QuoteIdent(newBaseName) : $"{SqliteManager.QuoteIdent(schema)}.{SqliteManager.QuoteIdent(newBaseName)}";
+                var newSql = re.Replace(sql, $"CREATE VIEW {viewNameForCreate} AS ", 1);
 
                 if (!cascade && dependents.Count > 0)
                 {
@@ -9196,7 +9448,15 @@ SELECT
                 {
                     foreach (var dn in dependents)
                     {
-                        var r2 = _sqliteManager.Query("SELECT sql FROM sqlite_master WHERE type='view' AND name=@name LIMIT 1;", new { name = dn });
+                        string depSchema = "main";
+                        string depName = dn;
+                        if (dn.Contains('.'))
+                        {
+                            var parts = dn.Split('.', 2);
+                            depSchema = parts[0];
+                            depName = parts[1];
+                        }
+                        var r2 = _sqliteManager.Query($"SELECT sql FROM {SqliteManager.QuoteIdent(depSchema)}.sqlite_master WHERE type='view' AND name=@name LIMIT 1;", new { name = depName });
                         var s2 = r2.FirstOrDefault()?["sql"]?.ToString() ?? "";
                         if (!string.IsNullOrWhiteSpace(s2)) depSql[dn] = s2;
                     }
@@ -9212,11 +9472,13 @@ SELECT
 
                 if (cascade && depSql.Count > 0)
                 {
-                    // 更新依赖 SQL：把 oldName 的引用替换为 newName（含 [old]）
+                    // 更新依赖 SQL：把 oldName 的引用替换为 fullNewName
                     string ReplaceRef(string s)
                     {
                         if (string.IsNullOrWhiteSpace(s)) return s;
-                        return ReplaceSqlIdentifier(s, oldName, newName);
+                        var res = ReplaceSqlIdentifier(s, oldName, fullNewName);
+                        if (schema != "main") res = ReplaceSqlIdentifier(res, oldBaseName, fullNewName);
+                        return res;
                     }
 
                     var pending = depSql.Select(kv => new KeyValuePair<string, string>(kv.Key, ReplaceRef(kv.Value))).ToList();
@@ -10897,22 +11159,62 @@ SELECT
                         break;
                 }
 
-                // 空值填充（当前优先支持 custom；其它方式先回退为 custom）
+                // 空值填充
                 if (fillEmpty)
                 {
+                    string computedFillValue = fillValue;
                     if (!string.Equals(fillMethod, "custom", StringComparison.OrdinalIgnoreCase))
                     {
-                        // TODO：forward/backward/median/mode/mean 可逐步增强
-                        fillMethod = "custom";
+                        var colType = (m.DataType ?? "text").ToLowerInvariant();
+                        var colNameSql = SqlIdent(m.Source);
+
+                        if (string.Equals(fillMethod, "mode", StringComparison.OrdinalIgnoreCase))
+                        {
+                            computedFillValue = _sqliteManager.ExecuteScalar<string>($@"
+                                SELECT {colNameSql} FROM [{sourceTable}]
+                                WHERE {colNameSql} IS NOT NULL AND TRIM(CAST({colNameSql} AS TEXT)) <> ''
+                                GROUP BY {colNameSql} ORDER BY COUNT(*) DESC LIMIT 1
+                            ") ?? fillValue;
+                        }
+                        else if (string.Equals(colType, "number", StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (string.Equals(fillMethod, "mean", StringComparison.OrdinalIgnoreCase))
+                            {
+                                computedFillValue = _sqliteManager.ExecuteScalar<string>($@"
+                                    SELECT AVG(CAST({colNameSql} AS REAL)) FROM [{sourceTable}]
+                                    WHERE {colNameSql} IS NOT NULL AND TRIM(CAST({colNameSql} AS TEXT)) <> ''
+                                ") ?? fillValue;
+                            }
+                            else if (string.Equals(fillMethod, "median", StringComparison.OrdinalIgnoreCase))
+                            {
+                                // SQLite 没有内置 median，通过排序和 LIMIT/OFFSET 模拟
+                                computedFillValue = _sqliteManager.ExecuteScalar<string>($@"
+                                    SELECT CAST({colNameSql} AS REAL) FROM [{sourceTable}]
+                                    WHERE {colNameSql} IS NOT NULL AND TRIM(CAST({colNameSql} AS TEXT)) <> ''
+                                    ORDER BY CAST({colNameSql} AS REAL)
+                                    LIMIT 1 OFFSET (
+                                        SELECT COUNT(*) / 2 FROM [{sourceTable}]
+                                        WHERE {colNameSql} IS NOT NULL AND TRIM(CAST({colNameSql} AS TEXT)) <> ''
+                                    )
+                                ") ?? fillValue;
+                            }
+                            else
+                            {
+                                // forward / backward 由于需要依赖明确的排序键，目前依然回退为 custom
+                                fillMethod = "custom";
+                            }
+                        }
+                        else
+                        {
+                            // 非数值类型且不是 mode 时，无法计算 mean/median，回退为 custom
+                            fillMethod = "custom";
+                        }
                     }
 
-                    if (string.Equals(fillMethod, "custom", StringComparison.OrdinalIgnoreCase))
-                    {
-                        if (string.Equals(m.DataType, "number", StringComparison.OrdinalIgnoreCase) && double.TryParse(fillValue, out var dv))
-                            expr = $"COALESCE({expr}, {dv.ToString(System.Globalization.CultureInfo.InvariantCulture)})";
-                        else
-                            expr = $"COALESCE(NULLIF({expr},''), {SqlValue(fillValue)})";
-                    }
+                    if (string.Equals(m.DataType, "number", StringComparison.OrdinalIgnoreCase) && double.TryParse(computedFillValue, out var dv))
+                        expr = $"COALESCE({expr}, {dv.ToString(System.Globalization.CultureInfo.InvariantCulture)})";
+                    else
+                        expr = $"COALESCE(NULLIF(CAST({expr} AS TEXT),''), {SqlValue(computedFillValue)})";
                 }
 
                 selectExprs.Add($"{expr} AS {SqlIdent(m.Target)}");
@@ -11344,7 +11646,7 @@ SELECT
         string beforeTable = "__CompareBefore";
         try
         {
-            if (_sqliteManager == null || _dataImporter == null)
+            if (_sqliteManager == null || !_importers.Any())
             {
                 SendMessageToWebView(new { action = "error", message = "SQLite/导入器未初始化" });
                 return;
@@ -11352,6 +11654,12 @@ SELECT
             if (string.IsNullOrWhiteSpace(_currentFilePath))
             {
                 SendMessageToWebView(new { action = "error", message = "请先选择主表文件" });
+                return;
+            }
+            var importer = _importers.FirstOrDefault(i => i.CanHandle(_currentFilePath));
+            if (importer == null)
+            {
+                SendMessageToWebView(new { action = "error", message = "数据导入器不支持该文件格式" });
                 return;
             }
             if (!data.TryGetProperty("settings", out var settings))
@@ -11390,7 +11698,7 @@ SELECT
             // 临时导入清洗前（用 text 模式避免转换丢失）
             _sqliteManager.Execute($"DROP TABLE IF EXISTS [{beforeTable}];");
             var progress = new Progress<ImportProgress>(_ => { });
-            var r = await _dataImporter.ImportWorksheetAsync(_currentFilePath, beforeSheet, beforeTable, "text", progress, CancellationToken.None);
+            var r = await importer.ImportWorksheetAsync(_currentFilePath, beforeSheet, beforeTable, "text", progress, CancellationToken.None);
             if (!r.Success) throw new InvalidOperationException(r.Message);
 
             var beforeSchema = _sqliteManager.GetTableSchema(beforeTable);
@@ -11978,7 +12286,18 @@ SELECT
 
     private void ShowHelp()
     {
-        MessageBox.Show("帮助功能正在开发中...", "帮助");
+        string helpText = "📖 ExcelSQLiteWeb 用户帮助\n\n" +
+                          "【核心功能】\n" +
+                          "• 项目管理：管理多个独立的数据工程项目，支持添加、修改数据集（Excel/CSV）。\n" +
+                          "• 数据集映射与入湖：将表格数据加载到 SQLite 内存库，支持独立表和合并表模式。\n" +
+                          "• 质量安全：支持字段级的正则校验、空值检测与差异检查。\n" +
+                          "• 查询分析：强大的 SQL 实验室，支持单表/多表联合查询及可视化结果导出。\n" +
+                          "• 关联关系识别：自动扫描分析多表之间的主外键关联，并生成 JOIN 草稿。\n\n" +
+                          "【高级功能】\n" +
+                          "• 对象/索引管理：对物理表、视图进行改名或依赖追踪（现已支持跨库重命名）。\n" +
+                          "• 专家模式：支持执行复杂的 DDL 及写入操作，支持复合多语句执行。\n\n" +
+                          "遇到问题请检查文件路径是否包含非法字符，或尝试“刷新”与“重新加载数据库”。";
+        MessageBox.Show(helpText, "系统帮助说明", MessageBoxButtons.OK, MessageBoxIcon.Information);
     }
 
     private void ShowAbout()
@@ -12312,18 +12631,65 @@ FROM template_rule WHERE template_id=@id AND enabled=1 ORDER BY sort_order;", ne
                     var outDir = GetEnumArchiveDir(_activeSchemeId!);
                     var safeTable = new string(table.Where(ch => char.IsLetterOrDigit(ch) || ch == '_' || ch == '-').ToArray());
                     if (string.IsNullOrWhiteSpace(safeTable)) safeTable = "table";
-                    var outPath = Path.Combine(outDir, $"enum_{safeTable}_{DateTime.Now:yyyyMMdd-HHmmss}.json");
+                    // 修改：一个表仅对应一个存档，去除时间戳后缀，覆盖原有文件
+                    var outPath = Path.Combine(outDir, $"enum_{safeTable}.json");
 
                     var result = new Dictionary<string, object?>();
+                    
+                    // 支持多次追加合并：如果文件已存在，先读取老数据
+                    if (File.Exists(outPath))
+                    {
+                        try
+                        {
+                            var oldJson = File.ReadAllText(outPath, Encoding.UTF8);
+                            var oldResult = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object?>>(oldJson);
+                            if (oldResult != null)
+                            {
+                                foreach (var kvp in oldResult)
+                                {
+                                    result[kvp.Key] = kvp.Value;
+                                }
+                            }
+                        }
+                        catch { }
+                    }
+
                     result["schemaVersion"] = 1;
                     result["schemeId"] = _activeSchemeId;
                     result["table"] = table;
                     result["sampleRows"] = sampleRows;
                     result["maxValues"] = maxValues;
                     result["withFreq"] = withFreq;
-                    result["createdAt"] = DateTime.Now.ToString("s");
+                    result["updatedAt"] = DateTime.Now.ToString("s");
+                    if (!result.ContainsKey("createdAt")) result["createdAt"] = DateTime.Now.ToString("s");
+
+                    // 提取老数据中的 columns，以便进行合并
+                    var oldColsList = new List<object>();
+                    if (result.TryGetValue("columns", out var oldColsObj) && oldColsObj is System.Text.Json.JsonElement oldColsElem && oldColsElem.ValueKind == System.Text.Json.JsonValueKind.Array)
+                    {
+                        foreach (var elem in oldColsElem.EnumerateArray())
+                        {
+                            oldColsList.Add(System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, object?>>(elem.GetRawText())!);
+                        }
+                    }
+                    else if (oldColsObj is List<object> ol)
+                    {
+                        oldColsList = ol;
+                    }
 
                     var colResults = new List<object>();
+                    // 先把不需要重新提取的老字段放进来
+                    foreach (var oldColObj in oldColsList)
+                    {
+                        if (oldColObj is Dictionary<string, object?> oldColDict)
+                        {
+                            var colName = oldColDict["column"]?.ToString();
+                            if (colName != null && !cols.Contains(colName))
+                            {
+                                colResults.Add(oldColDict);
+                            }
+                        }
+                    }
                     for (int idx = 0; idx < cols.Count; idx++)
                     {
                         token.ThrowIfCancellationRequested();
@@ -13788,6 +14154,7 @@ VALUES($id,'DETOKENIZE',$ns,$op,'expert',$rs,$in,$out,$st,'RUNNING',datetime('no
         try
         {
             _webBootUserMode = string.Equals(_webBootUserMode, "expert", StringComparison.OrdinalIgnoreCase) ? "normal" : "expert";
+            try { SaveRecentSchemesToDisk(); } catch { }
             try { await EnsureBootUserModeScriptAsync(); } catch { }
 
             // 先给前端回执，便于观察宿主是否真的切换

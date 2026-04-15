@@ -38,6 +38,7 @@ public sealed class ImportResult
     public string Message { get; set; } = "";
 
     public int RowCount { get; set; }
+    public int RowsInserted { get; set; }
     public int ColumnCount { get; set; }
     public double ImportTime { get; set; }
 

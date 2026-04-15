@@ -43,11 +43,49 @@
             background-color: var(--bg-primary);
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
+            line-height: 1.5;
         }
 
-        /* 统一：字段/标签不加粗（标题类仍可单独设置） */
-        label, .form-label, input, select, textarea, .table th, .table td {
+        /* 统一：除标题外，其余一律微软雅黑，9号字，不加粗 */
+        label, .form-label, input, select, textarea, button, .table th, .table td, .tab-btn {
+            font-family: "Microsoft YaHei", "微软雅黑", "Segoe UI", sans-serif !important;
+            font-size: 9pt !important;
             font-weight: normal !important;
+        }
+
+        /* 特殊：表格列宽与距宽优化 (紧凑型 Office 风格) */
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            font-size: 9pt;
+            table-layout: auto;
+        }
+        .table th, .table td {
+            padding: 6px 10px;
+            border: 1px solid var(--border-color);
+            text-align: left;
+            vertical-align: middle;
+            line-height: 1.4;
+        }
+        .table th {
+            background-color: #f3f2f1;
+            color: #323130;
+            font-weight: 600 !important; /* 表头作为信息重点，加粗 */
+            white-space: nowrap;
+        }
+
+        /* 标题类保留字号和加粗 */
+        h1, h2, h3, h4, h5, h6, .card-title, .modal-header h3 {
+            font-family: "Microsoft YaHei", "微软雅黑", "Segoe UI", sans-serif !important;
+            font-weight: bold !important;
+        }
+        .card-title {
+            font-size: 10pt !important;
+            color: var(--primary-blue);
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+            margin-bottom: 16px;
         }
         
         /* 主容器 */
@@ -529,6 +567,31 @@
             display: flex;
             overflow: hidden;
         }
+
+        /* 表格容器样式，保证横/纵向滑动 */
+        .table-container {
+            width: 100%;
+            overflow: auto;
+            max-height: 60vh;
+            border: 1px solid #e1e4e8;
+            background: #ffffff;
+            border-radius: 4px;
+        }
+
+        .table-container table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        .table-container th {
+            position: sticky;
+            top: 0;
+            background: #f3f2f1;
+            z-index: 10;
+            box-shadow: 0 1px 0 #e1e4e8;
+            color: #323130;
+            font-weight: 600;
+        }
         
         /* 左侧导航 */
         .sidebar {
@@ -853,7 +916,6 @@
             margin-top: 12px;
             box-shadow: 0 1px 3px rgba(0,0,0,0.1);
             border-radius: 4px;
-            overflow: hidden;
         }
         
         .table th,
@@ -864,6 +926,9 @@
         }
         
         .table th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
             /* 统一深色表头：确保对比度足够（部分表格可能有更高优先级样式，因此配合 thead th 的 !important 兜底） */
             background-color: #111827; /* slate-900 */
             font-weight: 700;
@@ -875,6 +940,7 @@
             letter-spacing: 0.2px;
             text-shadow: 0 1px 0 rgba(0,0,0,0.35);
             padding: 8px 10px;
+            box-shadow: 0 1px 0 rgba(255,255,255,0.18);
         }
 
         /* 表头易读 + 在滚动容器里保持可见（强制覆盖，避免“表头看不清”） */
@@ -983,7 +1049,8 @@
         
         /* 向导式界面样式 */
         .wizard-container {
-            max-width: 900px;
+            width: 100%;
+            max-width: none;
             margin: 0 auto;
         }
         
@@ -995,6 +1062,7 @@
             margin-bottom: 32px;
             position: relative;
             padding: 0 6px; /* 轻微内缩，避免首尾贴边不对称 */
+            transform: translateX(-16px); /* 视觉居中补偿：因为文字在右侧，整体往左平移一点达到视觉居中 */
             --step-count: 4; /* 默认步数；JS 会按实际步数覆盖 */
         }
         
@@ -1255,7 +1323,7 @@
         /* CodeMirror 容器自适应 */
         .CodeMirror { height: 100% !important; font-family: "Consolas","Monaco",monospace; font-size: 10pt; line-height: 1.6; }
         .CodeMirror-scroll { overscroll-behavior: contain; }
-    </style>
+        
         /* SQL编辑器：缓解拥挤 */
         #sqlEditorContainer.sql-editor-fullscreen{
             position: fixed;
@@ -1271,6 +1339,7 @@
             height: 44px !important;
             min-height: 44px !important;
         }
+    </style>
     <style>
         /* ===== SQL实验室：强硬风险提示 Modal ===== */
         .xslq-modal-mask{
@@ -1403,7 +1472,7 @@
             line-height: 1;
             padding: 0 2px;
         }
-        #pivotAvailableFields .pivot-field-remove{ display:none; }
+        #pivotAvailableFields .pivot-field-remove, #pivotAvailableFieldsFloat .pivot-field-remove { display:none; }
         /* 数据清洗：所有操作统一收口到底部固定栏（避免界面过密） */
         #dcCoreContainer .wizard-buttons:not(.wizard-bottom){ display:none !important; }
         /* 数据清洗底部栏：视觉与单表查询一致（sticky） */
@@ -1485,6 +1554,7 @@
                     <div class="ribbon-group">
                         <div class="ribbon-group-title">项目管理</div>
                         <div class="ribbon-buttons">
+                            <button class="ribbon-btn" onclick="switchTab('project-hub')"><svg class="icon-svg"><use href="#ico-chart"></use></svg><span>项目<br>中心</span></button>
                             <button class="ribbon-btn active" onclick="switchTab('file-wizard')"><svg class="icon-svg"><use href="#ico-folder-open"></use></svg><span>项目<br>管理</span></button>
                             <button class="ribbon-btn" onclick="switchTab('file-analysis')"><svg class="icon-svg"><use href="#ico-document-search"></use></svg><span>文件<br>分析</span></button>
                             <button class="ribbon-btn" onclick="switchTab('worksheet-analysis')"><svg class="icon-svg"><use href="#ico-document-page"></use></svg><span>工作表<br>分析</span></button>
@@ -1527,21 +1597,15 @@
                     <div class="ribbon-group">
                         <div class="ribbon-group-title">项目管理</div>
                         <div class="ribbon-buttons">
-                            <button class="ribbon-btn" data-expert-only="1" onclick="switchTab('project-hub')"><svg class="icon-svg"><use href="#ico-chart"></use></svg><span>项目<br>中心</span></button>
+                            <button class="ribbon-btn" onclick="switchTab('metadata-scan')"><svg class="icon-svg"><use href="#ico-scan"></use></svg><span>元数据<br>扫描</span></button>
+                            <button class="ribbon-btn" onclick="switchTab('project-hub')"><svg class="icon-svg"><use href="#ico-chart"></use></svg><span>项目<br>中心</span></button>
                             <button class="ribbon-btn" onclick="switchTab('file-wizard')"><svg class="icon-svg"><use href="#ico-folder-open"></use></svg><span>项目<br>管理</span></button>
-                            <button class="ribbon-btn" onclick="switchTab('model-management')"><svg class="icon-svg"><use href="#ico-table-multiple"></use></svg><span>建模<br>管理</span></button>
-                            <button class="ribbon-btn" data-expert-only="1" onclick="switchTab('db-object-manager')"><svg class="icon-svg"><use href="#ico-table"></use></svg><span>对象<br>管理</span></button>
-                        </div>
-                    </div>
-                    <div class="ribbon-group">
-                        <div class="ribbon-group-title">主数据管理</div>
-                        <div class="ribbon-buttons">
                             <button class="ribbon-btn" onclick="switchTab('file-analysis')"><svg class="icon-svg"><use href="#ico-document-search"></use></svg><span>文件<br>分析</span></button>
                             <button class="ribbon-btn" onclick="switchTab('worksheet-analysis')"><svg class="icon-svg"><use href="#ico-document-page"></use></svg><span>工作表<br>分析</span></button>
-                            <button class="ribbon-btn" onclick="switchTab('metadata-scan')"><svg class="icon-svg"><use href="#ico-scan"></use></svg><span>元数据<br>分析</span></button>
                             <button class="ribbon-btn" onclick="openEnumReader()"><svg class="icon-svg"><use href="#ico-list"></use></svg><span>枚举值<br>解读</span></button>
                             <button class="ribbon-btn" onclick="switchTab('relation-check')"><svg class="icon-svg"><use href="#ico-search"></use></svg><span>关联关系<br>识别</span></button>
-                            <button class="ribbon-btn" onclick="openMultiTableJoin()"><svg class="icon-svg"><use href="#ico-table-multiple"></use></svg><span>多表<br>关联</span></button>
+                            <button class="ribbon-btn" onclick="switchTab('model-management')"><svg class="icon-svg"><use href="#ico-table-multiple"></use></svg><span>建模<br>管理</span></button>
+                            <button class="ribbon-btn" data-expert-only="1" onclick="switchTab('db-object-manager')"><svg class="icon-svg"><use href="#ico-table"></use></svg><span>对象<br>管理</span></button>
                         </div>
                     </div>
                     <div class="ribbon-group">
@@ -1675,19 +1739,22 @@
                     <button class="btn btn-secondary" style="padding:3px 8px; font-size:9pt;" onclick="toggleSidebar()" title="收起侧边栏">收起</button>
                 </div>
                 <div class="sidebar-inner">
-                <div class="sidebar-section">
-                    <div class="sidebar-section-title" style="display:flex; align-items:center; justify-content:space-between;">
-                        <span>最近项目</span>
-                        <span style="font-size:8pt; color:#0078d4; cursor:pointer;" onclick="switchTab('project-hub')">项目中心</span>
-                    </div>
-                    <div id="recentSchemesList">
-                        <div style="color:#6c757d;font-size:9pt;padding:6px 8px;">
-                            暂无最近项目
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title" style="display:flex; align-items:center; justify-content:space-between;">
+                            <span>最近项目</span>
+                            <span style="display:flex; gap:10px; align-items:center;">
+                                <span style="font-size:8pt; color:#0078d4; cursor:pointer;" onclick="restoreLastScheme()">恢复</span>
+                                <span style="font-size:8pt; color:#0078d4; cursor:pointer;" onclick="switchTab('project-hub')">项目中心</span>
+                            </span>
+                        </div>
+                        <div id="recentSchemesList">
+                            <div style="color:#6c757d;font-size:9pt;padding:6px 8px;">
+                                暂无最近项目
+                            </div>
                         </div>
                     </div>
-                </div>
-                <div class="sidebar-section">
-                    <div class="sidebar-section-title">常用操作</div>
+                    <div class="sidebar-section">
+                        <div class="sidebar-section-title">常用操作</div>
                     <div id="commonOperationsList">
                         <div class="sidebar-item active" data-operation="file-wizard" onclick="switchTab('file-wizard')">
                             <div class="sidebar-item-content">
@@ -1738,7 +1805,7 @@
                     <div class="sidebar-section-title">工具</div>
                     <div class="sidebar-item" onclick="switchTab('project-hub')">项目中心</div>
                     <div class="sidebar-item" data-expert-only="1" onclick="switchTab('batch-process')">批量处理</div>
-                    <div class="sidebar-item" data-expert-only="1" onclick="switchTab('db-object-manager')">数据库对象管理</div>
+                    <div class="sidebar-item" data-expert-only="1" onclick="switchTab('db-object-manager')">对象/索引管理</div>
                 </div>
                 </div>
             </div>
@@ -1749,27 +1816,22 @@
                 <div id="project-hub" class="tab-content" style="display: block;">
                     <div class="card" style="margin-bottom:12px;">
                         <div class="card-title" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-                            <span>项目中心（总项目概况 → 当前活动项目 → 当前项目配置）</span>
+                            <span>项目中心（项目信息 → 项目编辑（源文件关系） → 建模管理 → 数据库管理 → 对象/索引管理）</span>
                             <span style="display:flex; gap:8px; align-items:center;">
+                                    <button class="btn btn-primary" style="padding:3px 10px; font-size:9pt;" onclick="newScheme()">＋ 新增项目</button>
                                 <button class="btn btn-secondary" style="padding:3px 10px; font-size:9pt;" onclick="requestProjectList()">刷新</button>
                                 <button class="btn btn-secondary" style="padding:3px 10px; font-size:9pt;" onclick="exportProjectOverview()">导出概况</button>
                                 <button class="btn btn-secondary" style="padding:3px 10px; font-size:9pt;" onclick="cleanupTempDb()" title="清理超期临时数据库（按项目INI配置）">🧹 清理临时数据库</button>
-                                <button class="btn btn-primary" style="padding:3px 10px; font-size:9pt;" onclick="switchTab('file-wizard')">项目编辑/数据接入</button>
                             </span>
                         </div>
                         <div style="display:flex; gap:8px; padding: 0 16px 14px; align-items:center; flex-wrap:wrap;">
-                            <div style="display:inline-flex; border:1px solid #e1e4e8; border-radius:4px; overflow:hidden;">
-                                <button id="phBtnOverview" class="btn btn-secondary" style="border:0; border-right:1px solid #e1e4e8; border-radius:0; padding:6px 12px; font-size:9pt;" onclick="setProjectHubView('overview')">总项目概况</button>
-                                <button id="phBtnActive" class="btn btn-secondary" style="border:0; border-right:1px solid #e1e4e8; border-radius:0; padding:6px 12px; font-size:9pt;" onclick="setProjectHubView('active')">当前活动项目</button>
-                                <button id="phBtnConfig" class="btn btn-secondary" style="border:0; border-radius:0; padding:6px 12px; font-size:9pt;" onclick="setProjectHubView('config')">当前项目配置</button>
-                            </div>
                             <input id="projectSearchInput" class="form-control" style="font-size:9pt; width: 320px;" placeholder="搜索项目名称/ID/主表..." oninput="filterProjectList()">
                             <span style="font-size:8pt; color:#6c757d;">提示：支持删除项目（会删除 ini/db/project.json；不允许删除当前激活项目）。</span>
                         </div>
                     </div>
 
                     <!-- 视图1：总项目概况 -->
-                    <div id="phViewOverview" style="display:block; height: calc(100vh - 310px);">
+                    <div id="phViewOverview" style="display:block; height: calc(100vh - 250px);">
                         <div class="card" style="height:100%; overflow:auto;">
                             <div class="card-title">所有项目概况（列表可导出）</div>
                             <table class="table" style="font-size:9pt;">
@@ -1794,71 +1856,68 @@
                         </div>
                     </div>
 
-                    <!-- 视图2：当前活动项目 -->
-                    <div id="phViewActive" style="display:none; height: calc(100vh - 310px);">
-                        <div style="display:flex; gap:12px; height:100%;">
-                            <div class="card" style="width: 420px; overflow:auto;">
-                                <div class="card-title">当前激活项目</div>
-                                <div id="activeProjectBox" style="font-size:9pt; color:#495057;">（加载中...）</div>
-                            </div>
-                            <div class="card" style="flex:1; overflow:auto;">
-                                <div class="card-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-                                    <span id="projectDetailTitle">当前项目详情</span>
-                                    <span style="display:flex; gap:8px; align-items:center;">
-                                        <button class="btn btn-success" style="padding:3px 10px; font-size:9pt;" onclick="openSelectedProject()">访问链接（打开）</button>
-                                        <button class="btn btn-secondary" style="padding:3px 10px; font-size:9pt;" onclick="openProjectDetailModal()">详情</button>
-                                        <button class="btn btn-secondary" style="padding:3px 10px; font-size:9pt;" onclick="exportProjectDetail()">导出详单</button>
-                                    </span>
-                                </div>
-                                <div id="projectDetailCards" style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
-                                    <div class="result-info" style="background:#f8f9fa; border-left:4px solid #adb5bd;">请选择一个项目</div>
-                                </div>
-                                <div style="margin-top:12px;">
-                                    <div class="card-title">文件列表详单（预览）</div>
-                                    <div id="projectDetailMore" style="font-size:9pt; color:#495057;">（待选择项目）</div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 视图3：当前项目配置 -->
-                    <div id="phViewConfig" style="display:none; height: calc(100vh - 310px);">
-                        <div style="display:flex; gap:12px; height:100%;">
-                            <div class="card" style="width: 420px; overflow:auto;">
-                                <div class="card-title">配置入口</div>
-                                <div style="font-size:9pt; color:#495057; line-height:1.8;">
-                                    <div>• 这里聚合“当前项目配置”入口，形成闭环：</div>
-                                    <div style="margin-left:12px;">- 数据接入（合并引入/关联引入/追加导入）</div>
-                                    <div style="margin-left:12px;">- 建模/关联（生成业务视图）</div>
-                                    <div style="margin-left:12px;">- 清洗/验证/比对（生成报告与修订点）</div>
-                                    <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
-                                        <button class="btn btn-primary" style="padding:6px 12px; font-size:9pt;" onclick="switchTab('file-wizard')">进入数据接入</button>
-                                        <button class="btn btn-secondary" style="padding:6px 12px; font-size:9pt;" onclick="alert('建模/关联：下一步实现（会在这里挂入口）')">建模/关联</button>
-                                        <button class="btn btn-secondary" style="padding:6px 12px; font-size:9pt;" onclick="alert('清洗/验证/比对：已存在模块，后续会在这里聚合入口')">清洗/验证/比对</button>
+                    <!-- 视图2：当前活动项目详情 (合并后) -->
+                    <div id="phViewActive" style="display:none; height: calc(100vh - 120px); overflow:hidden;">
+                        <div style="display:flex; gap:16px; height: 100%;">
+                            <!-- 左侧：配置与操作入口 -->
+                            <div class="card" style="width: 260px; flex-shrink:0; display:flex; flex-direction:column; margin-bottom:0;">
+                                <div class="card-title">配置与操作入口</div>
+                                <div style="font-size:9pt; color:#495057; line-height:1.8; overflow-y:auto; flex:1; padding-right:4px;">
+                                    <div style="margin-bottom:10px; font-weight:600; color:#0078d4;">系统工作流分层配置</div>
+                                    <div style="display:flex; flex-direction:column; gap:8px;">
+                                        <button class="btn btn-primary" style="padding:6px 10px; font-size:8.5pt; text-align:left;" onclick="switchFwTab('config')">1️⃣ 项目信息与数据接入</button>
+                                        <button class="btn btn-secondary" style="padding:6px 10px; font-size:8.5pt; text-align:left;" onclick="switchFwTab('config'); openImportWizard('append');">2️⃣ 导入执行 (表生成/追加)</button>
+                                        <button class="btn btn-secondary" style="padding:6px 10px; font-size:8.5pt; text-align:left;" onclick="switchTab('model-management')">3️⃣ 建模管理 (关联/视图)</button>
+                                        <button class="btn btn-secondary" style="padding:6px 10px; font-size:8.5pt; text-align:left;" onclick="switchTab('db-object-manager')">4️⃣ 对象/索引 (库内结构)</button>
+                                    </div>
+                                    <div style="margin-top:16px; border-top:1px solid #e1e4e8; padding-top:10px;">
+                                        <div style="margin-bottom:8px; font-weight:600; color:#333;">高级功能区</div>
+                                        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                                            <button class="btn btn-secondary" style="padding:4px 8px; font-size:8.5pt;" onclick="switchTab('sql-editor')">SQL实验室</button>
+                                            <button class="btn btn-secondary" style="padding:4px 8px; font-size:8.5pt;" onclick="switchTab('data-masking')">数据脱敏</button>
+                                            <button class="btn btn-secondary" style="padding:4px 8px; font-size:8.5pt;" onclick="switchTab('quality-security')">质量安全</button>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="card" style="flex:1; overflow:auto;">
-                                <div class="card-title">当前项目配置快照（预览）</div>
-                                <div id="projectConfigSnapshot" style="font-size:9pt; color:#495057;">（待选择项目）</div>
-                                <div style="margin-top:14px;">
-                                    <div class="card-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-                                        <span>质量安全（概览）</span>
+                            
+                            <!-- 右侧：概况、详单、快照 -->
+                            <div style="flex:1; display:flex; flex-direction:column;">
+                                <div class="card" style="flex:1; display:flex; flex-direction:column; padding: 0;">
+                                    <div class="card-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px; padding: 12px 16px; margin: 0; border-bottom: 1px solid #e1e4e8; background: #f8f9fa;">
+                                        <span id="projectDetailTitle">项目详情</span>
                                         <span style="display:flex; gap:8px; align-items:center;">
-                                            <button class="btn btn-secondary" style="padding:3px 10px; font-size:9pt;" onclick="dsRefreshStatus()">刷新状态</button>
-                                            <button class="btn btn-primary" style="padding:3px 10px; font-size:9pt;" onclick="switchTab('quality-security')">进入质量安全</button>
+                                            <button class="btn btn-secondary" style="padding:3px 10px; font-size:9pt;" onclick="refreshProjectState()">刷新</button>
                                         </span>
                                     </div>
-                                    <div id="dsStatusMiniBox" class="result-info" style="background:#f8f9fa; border-left:4px solid #adb5bd; font-size:9pt; color:#495057;">（待加载）</div>
-                                    <div style="margin-top:10px; display:flex; gap:8px; flex-wrap:wrap;">
-                                        <button class="btn btn-secondary" style="padding:6px 10px; font-size:9pt;" onclick="openDsMappingRules()">映射规则管理</button>
-                                        <button class="btn btn-secondary" style="padding:6px 10px; font-size:9pt;" onclick="openDsBusinessMasking()">业务数据脱敏</button>
-                                        <button class="btn btn-secondary" style="padding:6px 10px; font-size:9pt;" onclick="openDsBackup()">脱敏数据备份</button>
-                                        <button class="btn btn-secondary" style="padding:6px 10px; font-size:9pt;" onclick="openDsRestore()">脱敏数据还原</button>
-                                        <button class="btn btn-secondary" style="padding:6px 10px; font-size:9pt;" onclick="openSecurityWorkbench()">安全工作台</button>
-                                        <button class="btn btn-secondary" style="padding:6px 10px; font-size:9pt;" onclick="openEnumArchive()">枚举值存档</button>
+                                    <div style="display:flex; border-bottom: 1px solid #e1e4e8; background: #fff;">
+                                        <button class="btn" style="border:none; border-bottom:2px solid #0078d4; border-radius:0; background:transparent; font-weight:600; color:#0078d4; padding:10px 16px;" onclick="phSwitchRightTab('overview', this)">项目基本业务概况</button>
+                                        <button class="btn" style="border:none; border-bottom:2px solid transparent; border-radius:0; background:transparent; font-weight:400; color:#495057; padding:10px 16px;" onclick="phSwitchRightTab('snapshot', this)">策略及配置快照</button>
+                                        <button class="btn" style="border:none; border-bottom:2px solid transparent; border-radius:0; background:transparent; font-weight:400; color:#495057; padding:10px 16px;" onclick="phSwitchRightTab('mapping', this)">数据集映射及对照</button>
+                                        <button class="btn" style="border:none; border-bottom:2px solid transparent; border-radius:0; background:transparent; font-weight:400; color:#495057; padding:10px 16px;" onclick="phSwitchRightTab('import', this)">数据导入与修订</button>
+                                    </div>
+                                    <div style="flex:1; overflow:auto; padding:16px; background:#fff;">
+                                        <!-- Tab 1: 概况 -->
+                                        <div id="phRightTab_overview" style="display:block;">
+                                            <div id="projectDetailCards" style="display:grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+                                                <div class="result-info" style="background:#f8f9fa; border-left:4px solid #adb5bd;">请选择一个项目</div>
+                                            </div>
+                                        </div>
+                                        <!-- Tab 2: 快照 -->
+                                        <div id="phRightTab_snapshot" style="display:none;">
+                                            <div id="projectConfigSnapshot" style="font-size:9pt; color:#495057;">（待选择项目）</div>
+                                        </div>
+                                        <!-- Tab 3: 映射 -->
+                                        <div id="phRightTab_mapping" style="display:none;">
+                                            <div id="projectDetailMapping" style="font-size:9pt; color:#495057;">（待选择项目）</div>
+                                        </div>
+                                        <!-- Tab 4: 导入与修订 -->
+                                        <div id="phRightTab_import" style="display:none;">
+                                            <div id="projectDetailImport" style="font-size:9pt; color:#495057;">（待选择项目）</div>
+                                        </div>
                                     </div>
                                 </div>
+                                <div style="display:none;" id="activeProjectBox"></div>
                             </div>
                         </div>
                     </div>
@@ -2157,7 +2216,7 @@
                                 <button class="btn btn-primary" style="padding:6px 10px; font-size:9pt;" onclick="dsReviewExportHtml()">导出HTML</button>
                             </div>
                         </div>
-                        <pre id="dsReviewOut" style="margin-top:10px; white-space:pre-wrap; font-size:9pt; background:#0b1020; color:#d7e3ff; padding:10px; border-radius:6px; max-height:520px; overflow:auto;">（暂无结果）</pre>
+                        <pre id="dsReviewOut" style="margin-top:10px; white-space:pre-wrap; font-family:Consolas, Monaco, monospace; font-size:9.5pt; background:#f8f9fa; border:1px solid #e1e4e8; color:#333; padding:10px; border-radius:4px; max-height:520px; overflow:auto;">（暂无结果）</pre>
                     </div>
                 </div>
 
@@ -2261,7 +2320,7 @@
                                 </div>
                             </div>
                             <div id="dsEnumHint" style="margin-top:8px; font-size:9pt; color:#6c757d;"></div>
-                            <pre id="dsEnumOut" style="margin-top:10px; white-space:pre-wrap; font-size:9pt; background:#0b1020; color:#d7e3ff; padding:10px; border-radius:6px; max-height:520px; overflow:auto;">（暂无）</pre>
+                            <pre id="dsEnumOut" style="margin-top:10px; white-space:pre-wrap; font-family:Consolas, Monaco, monospace; font-size:9.5pt; background:#f8f9fa; border:1px solid #e1e4e8; color:#333; padding:10px; border-radius:4px; max-height:520px; overflow:auto;">（暂无）</pre>
                         </div>
                     </div>
                 </div>
@@ -2314,167 +2373,123 @@
                             </div>
                             <div id="enumReaderHint" style="font-size:9pt; color:#6c757d; margin-bottom:6px;"></div>
                         </div>
-                        <pre id="enumReaderOut" style="margin-top:10px; white-space:pre-wrap; font-size:9pt; background:#0b1020; color:#d7e3ff; padding:10px; border-radius:6px; max-height:520px; overflow:auto;">（暂无）</pre>
+                        <pre id="enumReaderOut" style="margin-top:10px; white-space:pre-wrap; font-family:Consolas, Monaco, monospace; font-size:9.5pt; background:#f8f9fa; border:1px solid #e1e4e8; color:#333; padding:10px; border-radius:4px; max-height:520px; overflow:auto;">（暂无）</pre>
                     </div>
                 </div>
 
                 <!-- 项目管理（原“打开文件向导”）界面 -->
                 <div id="file-wizard" class="tab-content" style="display:none;">
                     <div class="wizard-container">
-                        <!-- 项目管理：TAB 分页（避免固定栏占用过多空间） -->
-                        <div style="position: sticky; top: 0; z-index: 60; background: #fff; border: 1px solid #dee2e6; border-radius: 4px; padding: 8px; margin-bottom: 10px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                            <button id="fwPageBtn_sources" class="btn btn-secondary" style="padding:4px 10px; font-size:9pt;" onclick="fwPage('sources')">源文件清单</button>
-                            <button id="fwPageBtn_import" class="btn btn-secondary" style="padding:4px 10px; font-size:9pt;" onclick="fwPage('import')">导入/重建</button>
-                            <span style="margin-left:auto; color:#6c757d; font-size:8pt;">提示：先在“源文件清单”设定主表与显示名，再到“导入/重建”执行导入。</span>
-                        </div>
-                        <!-- 导入操作（置顶，合并为一个 GroupBox） -->
-                        <div id="fwPage_import" style="display:none; border: 1px solid #dee2e6; border-radius: 4px; padding: 10px; margin-bottom: 10px; background: #ffffff;">
-                        <div style="display:flex; gap:10px; align-items:center; justify-content:space-between; margin-bottom: 6px;">
-                            <div style="font-weight: normal; color: #333; font-size: 9pt;">🗄️ 导入操作</div>
-                            <div style="display:flex; gap:8px; align-items:center;">
-                                <span style="font-size:9pt; color:#495057;">项目名称:</span>
-                                <input id="schemeNameInput" class="form-control" style="width: 260px; height: 30px;" placeholder="例如：销售分析项目（可自动生成）">
-                                <label style="display:flex; align-items:center; gap:6px; font-size:9pt; color:#495057; margin:0 6px 0 4px;" title="开启后：识别关系/生成草稿/锁定SQL 等动作会自动保存到当前项目（debounce）。关闭后：仅手动点“保存为项目”才落盘。">
-                                    <input type="checkbox" id="chkAutoSaveProject" checked onchange="toggleAutoSaveProject(this.checked)"> 自动保存
-                                </label>
-                                <button class="wizard-btn wizard-btn-save" style="min-width: 120px;" onclick="saveCurrentScheme()">💾 保存项目</button>
-                                <div style="display:inline-flex; position: relative;">
-                                    <button class="wizard-btn wizard-btn-warning" style="min-width: 86px;" onclick="fwToggleMoreMenu(event)">更多 ▼</button>
-                                    <div id="fwMoreMenu" style="display:none; position:absolute; right:0; top: 38px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 190px;">
-                                        <div style="padding:10px 12px; cursor:pointer;" onclick="fwDoRebuildDb(); fwHideMoreMenu();">♻ 重建项目库（危险）</div>
-                                        <div style="padding:10px 12px; cursor:pointer;" onclick="fwOpenImportDiagnostics(); fwHideMoreMenu();">🧾 导入诊断（占位）</div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                            <div id="schemeDbPathHint" style="margin: 0 0 8px 0; font-size: 8pt; color:#6c757d; text-align:right;">
-                                临时数据库：未绑定（请先保存/加载项目）
-                            </div>
-                            <div style="display: flex; justify-content: center; gap: 10px; padding: 8px; background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%); border: 1px solid #dee2e6; border-radius: 4px;">
-                                <button class="wizard-btn wizard-btn-execute" onclick="loadToSqlite()">🗄️ 导入/重导数据库</button>
-                                <!-- 引入结果动作：默认“下载引入失败” -->
-                                <div style="display:inline-flex; position: relative;">
-                                    <button class="wizard-btn wizard-btn-download" onclick="runImportAction()">
-                                        <span id="importActionLabel">下载引入失败</span>
-                                    </button>
-                                    <button class="wizard-btn wizard-btn-execute" style="min-width: 36px; padding: 0 8px; background: linear-gradient(180deg, #fff7e6 0%, #ffe7ba 100%); border-color:#ffd591;" onclick="toggleImportActionMenu(event)">▼</button>
-                                    <div id="importActionMenu" style="display:none; position:absolute; right:0; top: 38px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 170px;">
-                                        <div style="padding:10px 12px; cursor:pointer;" onclick="setImportAction('success'); hideImportActionMenu();">下载引入成功</div>
-                                        <div style="padding:10px 12px; cursor:pointer;" onclick="setImportAction('fail'); hideImportActionMenu();">下载引入失败</div>
-                                        <div style="padding:10px 12px; cursor:pointer;" onclick="setImportAction('open'); hideImportActionMenu();">打开原生文件</div>
-                                    </div>
-                                </div>
-                            </div>
-                            <div style="margin-top: 8px; display:flex; align-items:center; gap:10px; justify-content:center; font-size: 9pt; color:#495057;">
-                                <label style="display:flex; align-items:center; gap:6px;">
-                                    <input type="checkbox" id="chkClearSqliteBeforeImport" checked>
-                                    导入前清空SQLite（推荐）
-                                </label>
-                                <label style="display:flex; align-items:center; gap:6px;">
-                                    <input type="checkbox" id="chkRevisionPointBeforeImport" checked>
-                                    导入前创建修订点（备份库）
-                                </label>
-                                <span style="display:flex; align-items:center; gap:6px; margin-left:6px;">
-                                    <span style="color:#6c757d;">写入方式:</span>
-                                    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-                                        <input type="radio" name="importWriteMode" value="overwrite" checked onchange="window.__importWriteMode='overwrite'"> 覆盖
-                                    </label>
-                                    <label style="display:flex; align-items:center; gap:4px; cursor:pointer;">
-                                        <input type="radio" name="importWriteMode" value="append" onchange="window.__importWriteMode='append'"> 追加
-                                    </label>
-                                </span>
-                                <span style="color:#6c757d;">提示：切换不同文件时建议清空，避免表混杂。</span>
-                            </div>
-                            <!-- 导入高级设置：用 TAB 分层，避免界面拥挤 -->
-                            <div style="margin-top:8px; display:flex; align-items:center; justify-content:center; gap:8px; flex-wrap:wrap;">
-                                <button id="fwIngestTabBtn_base" class="btn btn-secondary" style="padding:4px 10px; font-size:9pt;" onclick="fwIngestTab('base')">基础</button>
-                                <button id="fwIngestTabBtn_append" class="btn btn-secondary" style="padding:4px 10px; font-size:9pt;" onclick="fwIngestTab('append')">追加</button>
-                                <button id="fwIngestTabBtn_merge" class="btn btn-secondary" style="padding:4px 10px; font-size:9pt;" onclick="fwIngestTab('merge')">合并/关联</button>
-                            </div>
-                            <div id="fwIngestTab_base" style="margin-top:6px; text-align:center; color:#6c757d; font-size:9pt;">
-                                <div style="display:flex; justify-content:center; gap:10px; align-items:center; flex-wrap:wrap;">
-                                    <span style="color:#6c757d;">导入模式:</span>
-                                    <select id="globalImportMode" class="form-control" style="width:220px; height:28px; font-size:9pt;">
-                                        <option value="text">全列文本格式（最保真）</option>
-                                        <option value="smart">智能转换列格式 + 记录失败</option>
-                                    </select>
-                                    <span style="color:#6c757d; font-size:8pt;">提示：导入模式会影响字段类型与转换统计</span>
-                                </div>
-                                <div style="margin-top:6px;">基础导入：覆盖/追加 + 清空/修订点。高级功能请切换到“追加 / 合并/关联”。</div>
-                            </div>
-                            <div id="fwIngestTab_append" style="display:none; margin-top:6px; display:flex; align-items:center; gap:10px; justify-content:center; font-size: 9pt; color:#495057; flex-wrap:wrap;">
-                                <span style="color:#6c757d;">追加策略:</span>
-                                <select id="appendStrategySelect" class="form-control" style="width: 120px; height: 28px; font-size:9pt;" onchange="window.__appendStrategy=this.value;">
-                                    <option value="append">追加</option>
-                                    <option value="dedupe">去重</option>
-                                    <option value="upsert">Upsert</option>
-                                </select>
-                                <input id="appendKeyColumnsInput" class="form-control" style="width: 260px; height: 28px; font-size:9pt;" placeholder="键字段(逗号分隔) 例：ID,日期" oninput="window.__appendKeyColumns=this.value;" title="去重/Upsert 需要键字段；追加可为空">
-                                <span style="color:#6c757d; font-size:8pt;">提示：去重/Upsert 建议先选 text 导入更保真。</span>
-                            </div>
-                            <div id="fwIngestTab_merge" style="display:none; margin-top:6px; display:flex; align-items:center; gap:10px; justify-content:center; font-size: 9pt; color:#495057; flex-wrap:wrap;">
-                                <span style="color:#6c757d;">Merge 输出表名:</span>
-                                <input id="mergeDestTableName" class="form-control" style="width: 240px; height: 28px; font-size:9pt;" placeholder="用户自定义，例如 fact_sales_merge">
-                                <button class="btn btn-secondary" style="padding:6px 12px; font-size:9pt;" onclick="mergeImportedTables()">合并生成表</button>
-                                <span style="color:#6c757d; margin-left:10px;">Relate 视图名:</span>
-                                <input id="relateViewName" class="form-control" style="width: 240px; height: 28px; font-size:9pt;" placeholder="vw_rel_xxx（必填）" oninput="dvForceVwPrefix('relateViewName')">
-                                <button class="btn btn-primary" style="padding:6px 12px; font-size:9pt;" onclick="relateCreateDerivedView()">生成关联视图</button>
-                            </div>
-                            <!-- 选定主表（不重新导入，直接切换当前主表名变量） -->
-                            <div style="margin-top: 8px; display:flex; align-items:center; gap:10px; justify-content:center; font-size: 9pt; color:#495057;">
-                                <span style="min-width: 90px; font-weight: normal;">选定主表:</span>
-                                <select id="sqliteMainTableSelect" class="form-control" style="max-width: 520px;" onchange="onSqliteMainTableChanged()">
-                                    <option value="">（尚未导入）</option>
-                                </select>
-                                <span style="color:#6c757d;">提示：仅切换“当前主表”，不会清空SQLite，也不会重新导入。</span>
-                            </div>
-                            <div style="margin-top:10px; display:flex; justify-content:center; gap:10px; align-items:center; flex-wrap:wrap; font-size:9pt;">
-                                <button class="btn btn-secondary" style="padding:6px 12px; font-size:9pt;" onclick="fwOpenImportWizard()">🧭 导入向导</button>
-                                <button class="btn btn-secondary" style="padding:6px 12px; font-size:9pt;" onclick="fwAiSuggestProject()">🤖 AI建议（占位）</button>
-                                <span style="color:#6c757d; font-size:8pt;">提示：向导仅做“策略引导与参数填充”，不改变现有导入实现。</span>
-                            </div>
+                        <!-- 项目管理内部 Tab 导航 -->
+                        <div style="display:flex; border-bottom: 1px solid #e1dfdd; margin-bottom: 12px; padding: 0 16px;">
+                            <button id="fwTabBtnDetail" class="btn" style="border:none; background:transparent; padding:8px 16px; font-size:10pt; font-weight:bold; color:#0078d4; border-bottom:3px solid #0078d4; border-radius:0;" onclick="switchFwTab('detail')">项目详情</button>
+                            <button id="fwTabBtnConfig" class="btn" style="border:none; background:transparent; padding:8px 16px; font-size:10pt; font-weight:normal; color:#605e5c; border-bottom:3px solid transparent; border-radius:0;" onclick="switchFwTab('config')">项目配置编辑</button>
                         </div>
 
-                        <!-- 源文件清单（每个文件可勾选多个工作表；并从中选定一个“主表”） -->
-                        <div id="fwPage_sources" style="border: 1px solid #dee2e6; border-radius: 4px; padding: 12px; margin-bottom: 12px; background:#fff;">
-                            <div style="font-weight: normal; color: #333; margin-bottom: 10px; font-size: 9pt;">📚 源文件清单（可添加多个文件；每个文件可选多个工作表）</div>
-                            <div id="sourceFilesContainer"></div>
-                            <button class="btn btn-secondary" style="margin-top: 8px;" onclick="addSourceFile()">+ 添加源文件</button>
-                            <!-- 兼容：保留旧结构的隐藏控件（不再作为主流程UI） -->
+                        <!-- Tab 1: 项目详情 -->
+                        <div id="fwTabContentDetail" style="display:block;">
+                            <!-- 占位，等待 JS 将 DOM 移入或重新生成 -->
+                            <div id="fwPhViewDetailContainer"></div>
+                        </div>
+
+                        <!-- Tab 2: 项目配置编辑 -->
+                        <div id="fwTabContentConfig" style="display:none;">
+                            <!-- 项目接入与配置 -->
+                            <div style="position: sticky; top: 0; z-index: 60; background: #f3f2f1; border: 1px solid #e1dfdd; border-radius: 4px; padding: 12px 16px; margin-bottom: 12px; display:flex; gap:16px; align-items:center; flex-wrap:wrap; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">
+                                <span style="font-weight:bold; color:#0078d4; font-size:10pt;">基本信息</span>
+                                <div style="display:flex; align-items:center; gap:8px;">
+                                    <span style="font-size:9pt; color:#323130;">项目名称:</span>
+                                    <input id="schemeNameInput" class="form-control" style="width: 260px; height: 28px; font-size:9pt;" placeholder="未命名项目" onchange="saveCurrentScheme()">
+                                    <button class="btn btn-secondary" style="padding:4px 10px; font-size:9pt;" onclick="newScheme()">＋ 新建</button>
+                                </div>
+                                <div style="margin-left:auto; display:flex; gap:8px;">
+                                    <button class="btn btn-primary" style="padding:6px 16px; font-size:9pt; border-radius:2px; display:flex; align-items:center; gap:6px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);" onclick="openImportWizard('full')">
+                                        <span style="color:#ffdb58;">✨</span> 独立表数据导入向导
+                                    </button>
+                                    <button class="btn btn-primary" style="padding:6px 16px; font-size:9pt; border-radius:2px; display:flex; align-items:center; gap:6px; box-shadow: 0 1px 2px rgba(0,0,0,0.1);" onclick="openImportWizard('append')">
+                                        <span style="color:#fff;">➕</span> 合并表数据导入向导
+                                    </button>
+                                    <button class="btn" style="padding:6px 16px; font-size:9pt; background:#ffffff; border:1px solid #8a8886; color:#323130; border-radius:2px; margin-left:8px;" onmouseover="this.style.background='#f3f2f1'" onmouseout="this.style.background='#ffffff'" onclick="reloadSqliteDb()">重新加载数据库</button>
+                                    <button class="btn" style="padding:6px 16px; font-size:9pt; background:#ffffff; border:1px solid #8a8886; color:#323130; border-radius:2px; margin-left:4px;" onmouseover="this.style.background='#f3f2f1'" onmouseout="this.style.background='#ffffff'" onclick="refreshProjectState()">刷新</button>
+                                </div>
+                            </div>
+                            
+                            <!-- 原导入操作面板隐藏，将功能全部移入向导 -->
+                            <div id="fwPage_import" style="display:none;"></div>
+
+                            <div id="fwPage_sources" style="border: 1px solid #e1dfdd; border-radius: 4px; display: flex; flex-direction: column; height: 550px; margin-bottom: 12px; background:#ffffff; overflow:hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.05);">
+                                
+                                <!-- 顶部工具栏 (替代原来的底部黄色条) -->
+                                <div style="background: #f8f9fa; padding: 8px 16px; border-bottom: 1px solid #e1dfdd; display: flex; align-items: center; gap:16px;">
+                                    <span style="font-weight:bold; color:#323130; font-size:9pt; display:flex; align-items:center; gap:6px;">
+                                        <svg style="width:14px; height:14px; fill:#0078d4;"><use href="#ico-table"></use></svg>
+                                        数据库对象管理
+                                    </span>
+                                    <div style="width:1px; height:16px; background:#c8c6c4;"></div>
+                                    <div style="display:flex; gap:8px;" id="globalDataSourceActions">
+                                        <button class="btn" style="font-size:9pt; padding:4px 12px; background:#ffffff; border:1px solid #8a8886; color:#0078d4; border-radius:2px;" onmouseover="this.style.background='#f3f2f1'" onmouseout="this.style.background='#ffffff'" onclick="reimportAllSourceFiles()" title="重新导入当前项目的所有勾选数据表">重导全部入湖</button>
+                                        <button class="btn" style="font-size:9pt; padding:4px 12px; background:#ffffff; border:1px solid #8a8886; color:#0078d4; border-radius:2px;" onmouseover="this.style.background='#f3f2f1'" onmouseout="this.style.background='#ffffff'" onclick="reimportSelectedSourceFile()" title="仅重新导入左侧当前选中文件的数据表">重导选定入湖</button>
+                                        <button class="btn" style="font-size:9pt; padding:4px 12px; background:#ffffff; border:1px solid #8a8886; color:#d13438; border-radius:2px;" onmouseover="this.style.background='#fdf3f4'" onmouseout="this.style.background='#ffffff'" onclick="deleteSelectedSourceFileTables()" title="从数据库中删除选定文件的所有物理表">删除入湖数据</button>
+                                        <button class="btn" style="font-size:9pt; padding:4px 12px; background:#ffffff; border:1px solid #8a8886; color:#323130; border-radius:2px;" onmouseover="this.style.background='#f3f2f1'" onmouseout="this.style.background='#ffffff'" onclick="removeSelectedSourceFile()" title="仅从项目中移除文件，不删除数据库表">移除文件配置</button>
+                                        <div style="width:1px; height:16px; background:#c8c6c4; margin: 4px 4px;"></div>
+                                        <button class="btn" style="font-size:9pt; padding:4px 12px; background:#ffffff; border:1px solid #8a8886; color:#005a9e; font-weight:bold; border-radius:2px;" onmouseover="this.style.background='#f3f2f1'" onmouseout="this.style.background='#ffffff'" onclick="cleanupOrphanTables()" title="扫描并删除数据库中没有任何项目关联的物理表（孤儿表）">清理孤儿表</button>
+                                    </div>
+                                </div>
+
+                                <!-- 下半部：左列表 + 右表格 -->
+                                <div style="display: flex; flex: 1; overflow: hidden;">
+                                    <!-- 左侧数据源列表区 -->
+                                    <div style="width: 280px; border-right: 1px solid #e1dfdd; display: flex; flex-direction: column; background: #faf9f8;">
+                                        <div style="padding: 10px 16px; font-weight: 600; border-bottom: 1px solid #edebe9; font-size: 9pt; color: #323130; display:flex; justify-content:space-between; align-items:center; background:#f3f2f1;">
+                                            <span>源文件列表 (Data Sources)</span>
+                                            <button class="btn" style="font-size:12pt; padding:0 6px; background:transparent; border:none; color:#0078d4;" title="添加外部数据源" onmouseover="this.style.background='#edebe9'" onmouseout="this.style.background='transparent'" onclick="addSourceFile()">+</button>
+                                        </div>
+                                        <div id="dataSourceList" style="flex: 1; overflow-y: auto; padding: 8px; display: flex; flex-direction: column; gap: 4px;">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- 右侧明细表格区 -->
+                                    <div style="flex: 1; display: flex; flex-direction: column; background: #ffffff;">
+                                        <div id="datasetListContainer" style="flex: 1; overflow-y: auto; padding: 16px;">
+                                            <div style="color: #605e5c; font-size: 9pt; text-align: center; margin-top: 40px;">（请先在左侧选择或添加数据源）</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
                             <div style="display:none;">
                                 <input type="text" id="mainTableFile">
                                 <select id="mainTableSheet"></select>
                                 <div id="subTablesContainer"></div>
+                                <div id="sourceFilesContainer"></div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 建模管理（占位）：后续会聚合 关系识别 / 多表关联 / 业务视图（VIEW）管理 / 字段池与指标池 -->
+        <!-- 建模管理：聚合 关系识别 / 多表关联 (MTJ) / 业务视图（VIEW）管理 -->
                 <div id="model-management" class="tab-content" style="display:none;">
                     <div class="wizard-container">
                         <div style="display:flex; gap:12px; height: calc(100vh - 200px);">
                             <!-- 左：建模入口 + 派生视图列表 -->
                             <div style="width: 440px; display:flex; flex-direction:column; gap:12px;">
                                 <div class="card">
-                                    <div class="card-title">建模入口</div>
+                                    <div class="card-title">逻辑建模工具 (Logical Modeling)</div>
                                     <div class="result-info" style="background:#f8f9fa; border-left:4px solid #adb5bd;">
-                                        建模管理的核心产出：<b>派生视图（vw_ 前缀）</b>。<br>
-                                        先用 SQL 定义业务口径，再让查询/统计/透视/图表统一面向 VIEW，能极大简化多表关联工作。
+                                        将分散的物理表合并、关联，构建出供分析和查询使用的统一业务视图。
                                     </div>
                                     <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:12px;">
-                                        <button class="btn btn-secondary" onclick="switchTab('relation-check')">关联关系识别</button>
-                                        <button class="btn btn-secondary" onclick="openMultiTableJoin()">多表关联</button>
-                                        <button class="btn btn-primary" onclick="switchTab('project-hub')">项目中心</button>
+                                        <button class="btn btn-secondary" onclick="switchTab('relation-check')" title="自动分析表间的主外键关联草稿">1. 自动关系识别</button>
+                                        <button class="btn btn-secondary" onclick="openMultiTableJoin()" title="手动配置表与表之间的 JOIN 逻辑">2. 手动多表关联 (MTJ)</button>
                                     </div>
                                 </div>
 
                                 <div class="card" style="flex:1; overflow:auto;">
                                     <div class="card-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-                                        <span>派生视图列表</span>
+                                        <span>派生视图列表 (Derived Views)</span>
                                         <span style="display:flex; gap:8px;">
                                             <button class="btn btn-secondary" style="padding:3px 10px; font-size:9pt;" onclick="dvRefresh()">刷新</button>
-                                            <button class="btn btn-primary" style="padding:3px 10px; font-size:9pt;" onclick="dvNew()">新建</button>
+                                            <button class="btn btn-primary" style="padding:3px 10px; font-size:9pt;" onclick="dvNew()">+ 新建视图</button>
                                         </span>
                                     </div>
                                     <table class="table" style="font-size:9pt;">
@@ -2538,9 +2553,10 @@
                     <div class="wizard-container">
                         <div class="card">
                             <div class="card-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
-                                <span>数据库对象管理（表/视图）</span>
+                                <span>对象/索引管理（表/视图/索引）</span>
                                 <span style="display:flex; gap:8px; align-items:center;">
                                     <button class="btn btn-secondary" style="padding:6px 12px; font-size:9pt;" onclick="dbmRefresh()">刷新</button>
+                                    <button class="btn btn-secondary" style="padding:6px 12px; font-size:9pt;" onclick="openIndexManager()">索引管理</button>
                                 </span>
                             </div>
                             <div class="result-info" style="background:#f8f9fa; border-left:4px solid #adb5bd;">
@@ -2575,13 +2591,16 @@
                                         <tr>
                                             <th style="width:36px;"><input type="checkbox" id="dbmCheckAll" onchange="dbmToggleAll(this.checked)"></th>
                                             <th>对象名</th>
+                                            <th>默认别名</th>
+                                            <th>原始表名</th>
+                                            <th style="width:90px;">导入类型</th>
                                             <th style="width:80px;">类型</th>
                                             <th style="width:110px;">分类</th>
                                         <th style="width:220px;">操作</th>
                                         </tr>
                                     </thead>
                                     <tbody id="dbmBody">
-                                        <tr><td colspan="5" style="color:#6c757d;">（请点击“刷新”）</td></tr>
+                                        <tr><td colspan="8" style="color:#6c757d;">（请点击“刷新”）</td></tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -2700,7 +2719,6 @@
                                     <th>工作表名</th>
                                     <th>总字段数</th>
                                     <th>总行数</th>
-                                    <th>数据大小</th>
                                     <th>完整率</th>
                                     <th>操作</th>
                                 </tr>
@@ -2751,7 +2769,7 @@
                         </div>
                     </div>
 
-                    <!-- 4) 数字区（总字段数、总行数、数据大小、完整率） -->
+                    <!-- 4) 数字区（总字段数、总行数、完整率） -->
                     <div class="card-grid" id="worksheetStatsGrid" style="display: none;">
                         <div class="stat-card">
                             <div class="stat-value" id="wsStatFieldCount">-</div>
@@ -2760,10 +2778,6 @@
                         <div class="stat-card">
                             <div class="stat-value" id="wsStatRowCount">-</div>
                             <div class="stat-label">总行数</div>
-                        </div>
-                        <div class="stat-card">
-                            <div class="stat-value" id="wsStatSize">-</div>
-                            <div class="stat-label">数据大小</div>
                         </div>
                         <div class="stat-card">
                             <div class="stat-value" id="wsStatCompleteness">-</div>
@@ -2782,24 +2796,28 @@
                             <button class="btn btn-secondary" style="padding:4px 10px;" onclick="wsClearFieldSelection()">清空选择</button>
                             <button class="btn btn-secondary" style="padding:4px 10px;" onclick="wsCopySelectedFields()">复制选中字段</button>
                             <span style="margin-left:auto; font-size:8pt; color:#6c757d;">提示：单击选择，Shift 连选，双击复制字段名</span>
+                            <button class="btn btn-primary" style="padding:4px 10px;" onclick="addColumnToTable()">＋ 增加字段</button>
                             <button class="btn btn-secondary" style="padding:4px 10px;" onclick="exportWorksheetQuerySql()">导出SQL</button>
                             <button class="btn btn-secondary" style="padding:4px 10px;" onclick="exportWorksheetQuerySqlWithAlias()">导出SQL(别名)</button>
                         </div>
 
-                        <table class="table" id="wsFieldAnalysisTable">
-                            <thead>
-                                <tr>
-                                    <th>字段名称</th>
-                                    <th>数据类型</th>
-                                    <th>非空值</th>
-                                    <th>唯一值</th>
-                                    <th>最小值</th>
-                                    <th>最大值</th>
-                                    <th>示例值</th>
-                                </tr>
-                            </thead>
-                            <tbody id="wsFieldAnalysisBody"></tbody>
-                        </table>
+                        <div class="table-container">
+                            <table class="table" id="wsFieldAnalysisTable">
+                                <thead>
+                                    <tr>
+                                        <th>字段名称</th>
+                                        <th>数据类型</th>
+                                        <th>非空值</th>
+                                        <th>唯一值</th>
+                                        <th>最小值</th>
+                                        <th>最大值</th>
+                                        <th>示例值</th>
+                                        <th style="width: 60px;">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="wsFieldAnalysisBody"></tbody>
+                            </table>
+                        </div>
                         <div style="margin-top: 8px; font-size: 8pt; color: #6c757d;">
                             注：非空/唯一/最小/最大当前为“样本统计”，用于快速反馈。
                         </div>
@@ -2833,15 +2851,19 @@
                             <label class="form-label">扫描范围</label>
                             <div style="display: flex; gap: 16px; flex-wrap: wrap;">
                                 <label style="display: flex; align-items: center; gap: 4px;">
-                                    <input type="radio" name="scanScope" checked>
-                                    当前文件
+                                    <input type="radio" name="scanScope" value="files" checked>
+                                    当前项目所有源文件
                                 </label>
                                 <label style="display: flex; align-items: center; gap: 4px;">
-                                    <input type="radio" name="scanScope">
+                                    <input type="radio" name="scanScope" value="currentFile">
+                                    当前主文件
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 4px;">
+                                    <input type="radio" name="scanScope" value="folder">
                                     指定文件夹
                                 </label>
                                 <label style="display: flex; align-items: center; gap: 4px;">
-                                    <input type="radio" name="scanScope">
+                                    <input type="radio" name="scanScope" value="sqlite">
                                     当前SQLite
                                 </label>
                             </div>
@@ -2950,11 +2972,21 @@
                             <strong>目标：</strong>支持两表/多表的“候选关联关系”识别：字段名近似、枚举值近似、多字段组合等。<br>
                             <strong>提示：</strong>识别结果为“候选建议”，需结合业务确认；可用于快速生成多表关联草稿。
                         </div>
-                        <div class="form-group" style="margin-top: 10px;">
-                            <label class="form-label">识别模式</label>
+                        
+                        <div style="background:#fffbe6; border:1px solid #ffe58f; padding:12px; border-radius:6px; margin-top:10px; font-size:9pt; color:#495057;">
+                            <div style="font-weight:bold; margin-bottom:8px; display:flex; align-items:center; gap:16px;">
+                                枚举值来源：
+                                <label style="display:flex; align-items:center; gap:4px; font-weight:normal; cursor:pointer;"><input type="checkbox" id="relEnumArchive" checked> 1、来源于【枚举值解读】存档</label>
+                                <label style="display:flex; align-items:center; gap:4px; font-weight:normal; cursor:pointer;"><input type="checkbox" id="relEnumRealtime" checked> 2、实时解读</label>
+                            </div>
+                            <div>10万行以上记录（或50个字段以上的表），建议先采用【枚举值解读】功能解析枚举值</div>
+                        </div>
+
+                        <div class="form-group" style="margin-top: 15px; display:flex; align-items:center; gap:20px;">
+                            <label class="form-label" style="margin:0; min-width:80px;">识别模式</label>
                             <div style="display:flex; gap:16px; flex-wrap:wrap;">
-                                <label style="display:flex; gap:6px; align-items:center;"><input type="radio" name="relMode" value="primary-first" checked>主表优先（默认）</label>
-                                <label style="display:flex; gap:6px; align-items:center;"><input type="radio" name="relMode" value="pairwise">两两互扫（更慢）</label>
+                                <label style="display:flex; gap:6px; align-items:center; cursor:pointer;"><input type="radio" name="relMode" value="primary-first" checked>主表优先（默认）</label>
+                                <label style="display:flex; gap:6px; align-items:center; cursor:pointer;"><input type="radio" name="relMode" value="pairwise">两两互扫（更慢）</label>
                             </div>
                         </div>
                         <div class="form-group">
@@ -3057,7 +3089,7 @@
                         <!-- 清洗表（移到流程图标下面，保持向导风格统一） -->
                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin: 10px 0;">
                             <span style="font-size:9pt; color:#495057; min-width: 70px;">清洗表:</span>
-                            <select id="dcSourceTableSelect" class="form-control" style="width: 320px; height: 32px;"></select>
+                            <select id="dcSourceTableSelect" class="form-control" style="width: 320px; height: 32px;" onchange="onDcTableChanged(this.value)"></select>
                             <span style="color:#6c757d; font-size:8.5pt;">当前模块：<span id="dcModeLabel">字段格式清洗</span></span>
                         </div>
 
@@ -3559,7 +3591,7 @@
                                 <div id="dcTemplateBar" style="display:inline-flex; position: relative;">
                                     <button class="wizard-btn wizard-btn-save" onclick="toggleDcTemplateMenu(event)" title="设置模板：保存/加载/导出">设置模板</button>
                                     <button class="wizard-btn wizard-btn-execute" style="min-width: 36px; padding: 0 8px; background: linear-gradient(180deg, #fff7e6 0%, #ffe7ba 100%); border-color:#ffd591;" onclick="toggleDcTemplateMenu(event)">▼</button>
-                                    <div id="dcTemplateMenu" style="display:none; position:absolute; right:0; top: 38px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;">
+                                    <div id="dcTemplateMenu" style="display:none; position:absolute; right:0; bottom: 100%; margin-bottom: 6px; top: auto; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;">
                                         <!-- 动态填充 -->
                                     </div>
                                 </div>
@@ -4433,16 +4465,19 @@ ORDER BY 销售日期 DESC;"></textarea>
                 
                 <!-- 图表生成页面 -->
                 <div id="chart-generator" class="tab-content" style="display: none;">
-                    <div style="display: flex; gap: 16px; height: calc(100vh - 200px);">
-                        <!-- 左侧配置面板 -->
-                        <div style="width: 300px; display: flex; flex-direction: column; gap: 12px;">
+                    <div id="chart-layout-container" style="display: flex; gap: 16px; height: calc(100vh - 200px); flex-direction: row;">
+                        <!-- 配置区 (支持左右切换) -->
+                        <div id="chart-config-panel" style="width: 320px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; padding-right: 4px;">
                             <div class="card">
                                 <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
                                     <div class="card-title" style="margin:0;">图表配置</div>
-                                    <div id="chartTemplateBar" style="display:inline-flex; position: relative;">
-                                        <button class="btn btn-secondary" style="padding:3px 10px; font-size:9pt;" onclick="toggleTemplateMenu(event,'chart')" title="设置模板：保存/加载">设置模板</button>
-                                        <button class="btn btn-secondary" style="padding:3px 10px; min-width:36px; font-size:9pt;" onclick="toggleTemplateMenu(event,'chart')">▼</button>
-                                        <div id="chartTemplateMenu" style="display:none; position:absolute; right:0; top: 30px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
+                                    <div style="display:flex; gap:6px;">
+                                        <button class="btn btn-secondary" style="padding:3px 6px; font-size:9pt;" onclick="toggleChartLayout()" title="切换左右布局">⇋ 布局</button>
+                                        <div id="chartTemplateBar" style="display:inline-flex; position: relative;">
+                                            <button class="btn btn-secondary" style="padding:3px 10px; font-size:9pt;" onclick="toggleTemplateMenu(event,'chart')" title="设置模板：保存/加载">设置模板</button>
+                                            <button class="btn btn-secondary" style="padding:3px 10px; min-width:36px; font-size:9pt;" onclick="toggleTemplateMenu(event,'chart')">▼</button>
+                                            <div id="chartTemplateMenu" style="display:none; position:absolute; right:0; top: 30px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="form-group">
@@ -4456,10 +4491,12 @@ ORDER BY 销售日期 DESC;"></textarea>
                                     </select>
                                 </div>
                                 <div class="form-group">
-                                    <label class="form-label">数据源</label>
-                                    <select id="chartDataSource" class="form-control">
-                                        <option value="current">当前主表</option>
-                                        <option value="query">SQL查询结果</option>
+                                    <label class="form-label" style="display:flex; justify-content:space-between;">
+                                        数据源
+                                        <span style="font-size:8pt; color:#0078d4; cursor:pointer;" onclick="chartRefreshFields()">刷新字段</span>
+                                    </label>
+                                    <select id="chartDataSource" class="form-control" onchange="chartOnDataSourceChanged()">
+                                        <option value="">（请选择数据源）</option>
                                     </select>
                                 </div>
                                 <div class="form-group">
@@ -4505,16 +4542,36 @@ ORDER BY 销售日期 DESC;"></textarea>
                 
                 <!-- 透视表页面 -->
                 <div id="pivot-table" class="tab-content" style="display: none;">
-                    <div style="display: flex; gap: 16px; height: calc(100vh - 200px);">
-                        <!-- 左侧配置 -->
-                        <div style="width: 280px; display: flex; flex-direction: column; gap: 12px;">
+                    <div id="pivot-layout-container" style="display: flex; gap: 16px; height: calc(100vh - 200px); flex-direction: row;">
+                        <!-- 配置区 (支持左右切换) -->
+                        <div id="pivot-config-panel" style="width: 320px; display: flex; flex-direction: column; gap: 12px; overflow-y: auto; padding-right: 4px;">
                             <div class="card">
-                                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+                                <div style="display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px;">
                                     <div class="card-title" style="margin:0;">透视表配置</div>
-                                    <div id="pivotTemplateBar" style="display:inline-flex; position: relative;">
-                                        <button class="btn btn-secondary" style="padding:3px 10px; font-size:9pt;" onclick="toggleTemplateMenu(event,'pivot')" title="设置模板：保存/加载">设置模板</button>
-                                        <button class="btn btn-secondary" style="padding:3px 10px; min-width:36px; font-size:9pt;" onclick="toggleTemplateMenu(event,'pivot')">▼</button>
-                                        <div id="pivotTemplateMenu" style="display:none; position:absolute; right:0; top: 30px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
+                                    <div style="display:flex; gap:6px;">
+                                        <button class="btn btn-secondary" style="padding:3px 6px; font-size:9pt;" onclick="togglePivotLayout()" title="切换左右布局">⇋ 布局</button>
+                                        <div id="pivotTemplateBar" style="display:inline-flex; position: relative;">
+                                            <button class="btn btn-secondary" style="padding:3px 10px; font-size:9pt;" onclick="toggleTemplateMenu(event,'pivot')" title="设置模板：保存/加载">设置模板</button>
+                                            <button class="btn btn-secondary" style="padding:3px 10px; min-width:36px; font-size:9pt;" onclick="toggleTemplateMenu(event,'pivot')">▼</button>
+                                            <div id="pivotTemplateMenu" style="display:none; position:absolute; right:0; top: 30px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 12px;">
+                                    <label class="form-label" style="display:flex; justify-content:space-between;">
+                                        数据源
+                                        <span style="font-size:8pt; color:#0078d4; cursor:pointer;" onclick="pivotRefreshFields()">刷新字段</span>
+                                    </label>
+                                    <select id="pivotDataSource" class="form-control" onchange="pivotOnDataSourceChanged()">
+                                        <option value="">（请选择数据源）</option>
+                                    </select>
+                                </div>
+                                <div class="form-group" style="margin-bottom: 12px; display:none;">
+                                    <label class="form-label" style="display:flex; justify-content:space-between; align-items:center;">
+                                        可用字段 (拖拽或点击)
+                                    </label>
+                                    <div id="pivotAvailableFields" class="pivot-dropzone" data-zone="pool" style="min-height: 80px; max-height: 160px; overflow-y: auto; background:#f8f9fa; border:1px solid #e1dfdd;">
+                                        <div class="pivot-placeholder">请先选择数据源</div>
                                     </div>
                                 </div>
                                 <div class="form-group">
@@ -4563,22 +4620,34 @@ ORDER BY 销售日期 DESC;"></textarea>
                                         </div>
                                     </div>
                                 </div>
-                                <div class="form-group" id="pivotAvailableGroup" style="display:none;">
+                                <div class="form-group" style="display:none;">
                                     <label class="form-label">可用字段</label>
-                                    <div id="pivotAvailableFields" class="pivot-dropzone" data-zone="pool" style="min-height: 120px;">
+                                    <div id="pivotAvailableFieldsOld" class="pivot-dropzone" data-zone="pool" style="min-height: 80px;">
                                         <div class="pivot-placeholder">加载数据后自动显示字段</div>
                                     </div>
                                 </div>
-                                <button class="btn btn-success" style="width: 100%;" onclick="generatePivotTable()">生成透视表</button>
+                                <button class="btn btn-success" style="width: 100%; margin-top: 8px;" onclick="generatePivotTable()">生成透视表</button>
                             </div>
                         </div>
                         
-                        <!-- 右侧结果 -->
-                        <div style="flex: 1;">
+                        <!-- 可用字段弹出面板 (悬浮) -->
+                        <div id="pivotFieldFloatPanel" style="display:none; position:absolute; top:80px; right:32px; width:280px; max-height:calc(100vh - 200px); background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 10px 30px rgba(0,0,0,0.18); z-index:100; flex-direction:column; overflow:hidden;">
+                            <div style="background:#f3f2f1; padding:10px 12px; border-bottom:1px solid #e1dfdd; font-weight:bold; color:#323130; display:flex; justify-content:space-between; align-items:center; cursor:move;" id="pivotFieldFloatHeader">
+                                <span>可用字段 (拖拽)</span>
+                                <button class="btn" style="padding:0 6px; background:transparent; border:none; font-size:12pt; color:#605e5c;" onclick="document.getElementById('pivotFieldFloatPanel').style.display='none'">×</button>
+                            </div>
+                            <div style="padding:12px; overflow-y:auto; flex:1;" id="pivotAvailableFieldsFloat" class="pivot-dropzone" data-zone="pool">
+                                <div class="pivot-placeholder">请先选择数据源</div>
+                            </div>
+                        </div>
+
+                        <!-- 结果区 -->
+                        <div id="pivot-result-panel" style="flex: 1; min-width: 0; position:relative;">
                             <div class="card" style="height: 100%;">
                                 <div class="card-title" style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
                                     <span>透视表结果</span>
                                     <span style="display:flex; gap:8px; align-items:center;">
+                                        <button class="btn btn-primary" style="padding:2px 8px; font-size:8pt;" onclick="document.getElementById('pivotFieldFloatPanel').style.display='flex'">📝 选字段</button>
                                         <button class="btn btn-secondary" style="padding:2px 8px; font-size:8pt;" onclick="pivotOpenChartFromLast()">📊 转图表</button>
                                         <button class="btn btn-secondary" style="padding:2px 8px; font-size:8pt;" onclick="pivotClearSelections()">🧹 清空配置</button>
                                     </span>
@@ -4625,7 +4694,10 @@ ORDER BY 销售日期 DESC;"></textarea>
                         <!-- 步骤1: 选择字段 -->
                         <div class="step-content active" id="step1">
                             <div class="card">
-                                <div class="card-title">选择查询字段</div>
+                                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span>选择查询字段</span>
+                                    <button class="btn btn-secondary" style="font-size:8pt; padding:2px 8px;" onclick="forceRefreshSingleTableFields()">刷新表字段</button>
+                                </div>
                                 <div class="form-group">
                                     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                         <label class="form-label" style="min-width: 80px; margin: 0;">数据源:</label>
@@ -4787,22 +4859,26 @@ ORDER BY 销售日期 DESC;"></textarea>
                                 <div id="stqTemplateBar" style="display:inline-flex; position: relative;">
                                     <button class="wizard-btn wizard-btn-save" onclick="toggleTemplateMenu(event,'stq')" title="设置模板：保存/加载">设置模板</button>
                                     <button class="wizard-btn wizard-btn-execute" style="min-width: 36px; padding: 0 8px; background: linear-gradient(180deg, #fff7e6 0%, #ffe7ba 100%); border-color:#ffd591;" onclick="toggleTemplateMenu(event,'stq')">▼</button>
-                                    <div id="stqTemplateMenu" style="display:none; position:absolute; left:0; top: 38px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
+                                    <div id="stqTemplateMenu" style="display:none; position:absolute; left:0; bottom: 100%; margin-bottom: 6px; top: auto; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
                                 </div>
                                 <button class="wizard-btn wizard-btn-prev" id="stqBarPrev" onclick="stqBarPrev()" title="上一步 (Alt+Left)">← 上一步</button>
                                 <button class="wizard-btn wizard-btn-next" id="stqBarNext" onclick="stqBarNext()" title="下一步 (Alt+Right)">下一步 →</button>
                                 <button class="wizard-btn wizard-btn-execute" id="stqBarExecute" onclick="executeQuery()" title="执行查询 (F5)">▶ 执行查询</button>
-                                <button class="wizard-btn wizard-btn-execute" id="stqBarSplit" onclick="stqGoSplit()" title="基于当前SQL执行分拆">⫷ 数据分拆</button>
                                 <button class="wizard-btn wizard-btn-copy" id="stqBarCopy" onclick="copyQuerySQL()" title="复制SQL (Ctrl+C)">📋 复制SQL</button>
                                 <div id="stqBarExport" style="display:inline-flex; position: relative;">
-                                    <button class="wizard-btn wizard-btn-download" onclick="exportStq('xlsx')" title="下载Excel">⬇ 下载Excel</button>
+                                    <button class="wizard-btn wizard-btn-download" onclick="exportStq('xlsx')" title="下载">⬇ 下载</button>
                                     <button class="wizard-btn wizard-btn-execute" style="min-width: 36px; padding: 0 8px; background: linear-gradient(180deg, #fff7e6 0%, #ffe7ba 100%); border-color:#ffd591;" onclick="toggleDownloadMenu(event)">▼</button>
-                                    <div id="stqDownloadMenu" style="display:none; position:absolute; right:0; top: 38px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 160px;">
-                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportStq('xlsx'); hideDownloadMenu();">下载Excel（.xlsx）</div>
-                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportStq('xlsx_text'); hideDownloadMenu();">下载Excel（强制全列文本）</div>
-                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportStq('csv'); hideDownloadMenu();">下载CSV</div>
+                                    <div id="stqDownloadMenu" style="display:none; position:absolute; right:0; bottom: 100%; margin-bottom: 6px; top: auto; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 160px;">
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportStq('xlsx'); hideDownloadMenu();">Excel（.xlsx）</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportStq('xlsx_text'); hideDownloadMenu();">Excel（强制全列文本）</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportStq('csv'); hideDownloadMenu();">CSV</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportStq('dbf'); hideDownloadMenu();">DBF</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportStq('db'); hideDownloadMenu();">SQLite (.db)</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportStq('html'); hideDownloadMenu();">HTML</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportStq('xml'); hideDownloadMenu();">XML</div>
                                     </div>
                                 </div>
+                                <button class="wizard-btn wizard-btn-execute" id="stqBarSplit" onclick="stqGoSplit()" title="基于当前SQL执行分拆">⫷ 数据分拆</button>
                                 <button class="wizard-btn wizard-btn-exit" onclick="exitWizard()" title="退出 (Esc)">✕ 退出</button>
                             </div>
                         </div>
@@ -4889,7 +4965,13 @@ ORDER BY 销售日期 DESC;"></textarea>
                         <!-- 步骤2: 设置关联条件 -->
                         <div class="step-content" id="step-mtq2">
                             <div class="card">
-                                <div class="card-title">设置表关联条件</div>
+                                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span>设置表关联条件</span>
+                                    <span style="display:flex; gap:6px; align-items:center;">
+                                        <button class="btn btn-secondary" style="font-size:8pt; padding:2px 8px;" onclick="mtqSaveDraft()">保存草稿</button>
+                                        <button class="btn btn-secondary" style="font-size:8pt; padding:2px 8px;" onclick="mtqForceRefreshFields()">刷新关联字段</button>
+                                    </span>
+                                </div>
                                 <div class="form-group">
                                     <label class="form-label">Join 设计器 <span style="font-size:8pt;color:#6c757d;">（表与字段绑定在同一行；支持 ON 关联 + AND 附加条件）</span></label>
                                     <div id="mtqJoinDesigner"></div>
@@ -4905,7 +4987,10 @@ ORDER BY 销售日期 DESC;"></textarea>
                         <!-- 步骤3: 选择查询字段 -->
                         <div class="step-content" id="step-mtq3">
                             <div class="card">
-                                <div class="card-title">选择查询字段</div>
+                                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span>选择查询字段</span>
+                                    <button class="btn btn-secondary" style="font-size:8pt; padding:2px 8px;" onclick="mtqForceRefreshFields()">刷新关联字段</button>
+                                </div>
                                 <div class="form-group">
                                     <label class="form-label">可用字段 <span style="font-size: 8pt; color: #666;">(自动处理同名字段冲突)</span></label>
                                     <div style="display:flex; gap:8px; margin-bottom:8px; flex-wrap:wrap;">
@@ -4942,7 +5027,10 @@ ORDER BY 销售日期 DESC;"></textarea>
                         <!-- 步骤4: 设置过滤条件 -->
                         <div class="step-content" id="step-mtq4">
                             <div class="card">
-                                <div class="card-title">设置过滤条件</div>
+                                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span>设置过滤条件</span>
+                                    <button class="btn btn-secondary" style="font-size:8pt; padding:2px 8px;" onclick="mtqForceRefreshFields()">刷新关联字段</button>
+                                </div>
                                 <div class="form-group">
                                     <label class="form-label">过滤条件 <span style="font-size: 8pt; color: #666;">(可选；支持 A.字段 / B.字段...)</span></label>
                                     <div id="mtqFilterConditions"></div>
@@ -5004,13 +5092,13 @@ ORDER BY 销售日期 DESC;"></textarea>
                                     <button class="wizard-btn wizard-btn-save" onclick="mtjLoadJson()" title="从当前项目加载多表关联配置（.mtj.json）">📥 加载MTJ</button>
                                 </div>
                                     <button class="wizard-btn wizard-btn-execute" style="min-width: 36px; padding: 0 8px; background: linear-gradient(180deg, #fff7e6 0%, #ffe7ba 100%); border-color:#ffd591;" onclick="toggleTemplateMenu(event,'mtq')">▼</button>
-                                    <div id="mtqTemplateMenu" style="display:none; position:absolute; left:0; top: 38px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
+                                    <div id="mtqTemplateMenu" style="display:none; position:absolute; left:0; bottom: 100%; margin-bottom: 6px; top: auto; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
                                 </div>
                                 <button class="wizard-btn wizard-btn-prev" id="mtqBarPrev" onclick="mtqBarPrev()" title="上一步 (Alt+Left)">← 上一步</button>
                                 <button class="wizard-btn wizard-btn-next" id="mtqBarNext" onclick="mtqBarNext()" title="下一步 (Alt+Right)">下一步 →</button>
                                 <button class="wizard-btn wizard-btn-execute" id="mtqBarExecute" onclick="lockMtjSql()" title="锁定SQL (F5)">🔒 锁定SQL</button>
-                                <button class="wizard-btn wizard-btn-execute" id="mtqBarSplit" onclick="mtqGoSplit()" title="基于当前SQL执行分拆">⫷ 数据分拆</button>
                                 <button class="wizard-btn wizard-btn-copy" id="mtqBarCopy" onclick="copyQuerySQL()" title="复制SQL (Ctrl+C)">📋 复制SQL</button>
+                                <button class="wizard-btn wizard-btn-execute" id="mtqBarSplit" onclick="mtqGoSplit()" title="基于当前SQL执行分拆">⫷ 数据分拆</button>
                                 <button class="wizard-btn wizard-btn-exit" onclick="exitWizard()" title="退出 (Esc)">✕ 退出</button>
                             </div>
                         </div>
@@ -5139,7 +5227,7 @@ ORDER BY 销售日期 DESC;"></textarea>
                                 <div id="mtqlTemplateBar" style="display:inline-flex; position: relative;">
                                     <button class="wizard-btn wizard-btn-save" onclick="toggleTemplateMenu(event,'mtql')" title="设置模板：保存/加载">设置模板</button>
                                     <button class="wizard-btn wizard-btn-execute" style="min-width: 36px; padding: 0 8px; background: linear-gradient(180deg, #fff7e6 0%, #ffe7ba 100%); border-color:#ffd591;" onclick="toggleTemplateMenu(event,'mtql')">▼</button>
-                                    <div id="mtqlTemplateMenu" style="display:none; position:absolute; left:0; top: 38px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
+                                    <div id="mtqlTemplateMenu" style="display:none; position:absolute; left:0; bottom: 100%; margin-bottom: 6px; top: auto; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
                                 </div>
                                 <button class="wizard-btn wizard-btn-save" onclick="openMultiTableJoin()" title="打开多表关联配置">🔧 多表关联配置</button>
                                 <button class="wizard-btn wizard-btn-prev" id="mtqlBarPrev" onclick="prevMtqlStep()">← 上一步</button>
@@ -5320,7 +5408,7 @@ ORDER BY 销售日期 DESC;"></textarea>
                                 <div id="mtslTemplateBar" style="display:inline-flex; position: relative;">
                                     <button class="wizard-btn wizard-btn-save" onclick="toggleTemplateMenu(event,'mtsl')" title="设置模板：保存/加载">设置模板</button>
                                     <button class="wizard-btn wizard-btn-execute" style="min-width: 36px; padding: 0 8px; background: linear-gradient(180deg, #fff7e6 0%, #ffe7ba 100%); border-color:#ffd591;" onclick="toggleTemplateMenu(event,'mtsl')">▼</button>
-                                    <div id="mtslTemplateMenu" style="display:none; position:absolute; left:0; top: 38px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
+                                    <div id="mtslTemplateMenu" style="display:none; position:absolute; left:0; bottom: 100%; margin-bottom: 6px; top: auto; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
                                 </div>
                                 <button class="wizard-btn wizard-btn-save" onclick="openMultiTableJoin()" title="打开多表关联配置">🔧 多表关联配置</button>
                                 <button class="wizard-btn wizard-btn-prev" id="mtslBarPrev" onclick="prevMtslStep()">← 上一步</button>
@@ -5342,7 +5430,7 @@ ORDER BY 销售日期 DESC;"></textarea>
                                 <div id="sstBarExport" style="display:inline-flex; position: relative;">
                                     <button class="wizard-btn wizard-btn-download" onclick="exportSearch('sst','xlsx','open')" title="打开Excel/下载">⬇ 打开</button>
                                     <button class="wizard-btn wizard-btn-execute" style="min-width: 36px; padding: 0 8px; background: linear-gradient(180deg, #fff7e6 0%, #ffe7ba 100%); border-color:#ffd591;" onclick="toggleSearchDownloadMenu('sst', event)">▼</button>
-                                    <div id="sstDownloadMenu" style="display:none; position:absolute; left:0; top: 38px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 180px;">
+                                    <div id="sstDownloadMenu" style="display:none; position:absolute; left:0; bottom: 100%; margin-bottom: 6px; top: auto; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 180px;">
                                         <div style="padding:10px 12px; cursor:pointer;" onclick="exportSearch('sst','xlsx','open'); hideSearchDownloadMenu('sst');">打开Excel（.xlsx）</div>
                                         <div style="padding:10px 12px; cursor:pointer;" onclick="exportSearch('sst','xlsx','saveas'); hideSearchDownloadMenu('sst');">另存为Excel（.xlsx）</div>
                                         <div style="padding:10px 12px; cursor:pointer;" onclick="exportSearch('sst','xlsx_text','open'); hideSearchDownloadMenu('sst');">打开Excel（全列文本）</div>
@@ -5396,7 +5484,7 @@ ORDER BY 销售日期 DESC;"></textarea>
                                 <div id="mtjsBarExport" style="display:inline-flex; position: relative;">
                                     <button class="wizard-btn wizard-btn-download" onclick="exportSearch('mtjs','xlsx','open')" title="打开Excel/下载">⬇ 打开</button>
                                     <button class="wizard-btn wizard-btn-execute" style="min-width: 36px; padding: 0 8px; background: linear-gradient(180deg, #fff7e6 0%, #ffe7ba 100%); border-color:#ffd591;" onclick="toggleSearchDownloadMenu('mtjs', event)">▼</button>
-                                    <div id="mtjsDownloadMenu" style="display:none; position:absolute; left:0; top: 38px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 180px;">
+                                    <div id="mtjsDownloadMenu" style="display:none; position:absolute; left:0; bottom: 100%; margin-bottom: 6px; top: auto; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 180px;">
                                         <div style="padding:10px 12px; cursor:pointer;" onclick="exportSearch('mtjs','xlsx','open'); hideSearchDownloadMenu('mtjs');">打开Excel（.xlsx）</div>
                                         <div style="padding:10px 12px; cursor:pointer;" onclick="exportSearch('mtjs','xlsx','saveas'); hideSearchDownloadMenu('mtjs');">另存为Excel（.xlsx）</div>
                                         <div style="padding:10px 12px; cursor:pointer;" onclick="exportSearch('mtjs','xlsx_text','open'); hideSearchDownloadMenu('mtjs');">打开Excel（全列文本）</div>
@@ -5448,7 +5536,7 @@ ORDER BY 销售日期 DESC;"></textarea>
                                 <div id="gusBarExport" style="display:inline-flex; position: relative;">
                                     <button class="wizard-btn wizard-btn-download" onclick="exportSearch('gus','xlsx','open')" title="打开Excel/下载">⬇ 打开</button>
                                     <button class="wizard-btn wizard-btn-execute" style="min-width: 36px; padding: 0 8px; background: linear-gradient(180deg, #fff7e6 0%, #ffe7ba 100%); border-color:#ffd591;" onclick="toggleSearchDownloadMenu('gus', event)">▼</button>
-                                    <div id="gusDownloadMenu" style="display:none; position:absolute; left:0; top: 38px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 180px;">
+                                    <div id="gusDownloadMenu" style="display:none; position:absolute; left:0; bottom: 100%; margin-bottom: 6px; top: auto; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 180px;">
                                         <div style="padding:10px 12px; cursor:pointer;" onclick="exportSearch('gus','xlsx','open'); hideSearchDownloadMenu('gus');">打开Excel（.xlsx）</div>
                                         <div style="padding:10px 12px; cursor:pointer;" onclick="exportSearch('gus','xlsx','saveas'); hideSearchDownloadMenu('gus');">另存为Excel（.xlsx）</div>
                                         <div style="padding:10px 12px; cursor:pointer;" onclick="exportSearch('gus','xlsx_text','open'); hideSearchDownloadMenu('gus');">打开Excel（全列文本）</div>
@@ -5526,7 +5614,10 @@ ORDER BY 销售日期 DESC;"></textarea>
                         <!-- 步骤1: 选择维度 -->
                         <div class="step-content active" id="step-sts1">
                             <div class="card">
-                                <div class="card-title">选择维度（用于分组）</div>
+                                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
+                                    <span>选择维度（用于分组）</span>
+                                    <button class="btn btn-secondary" style="font-size:8pt; padding:2px 8px;" onclick="forceRefreshSingleTableFields()">刷新表字段</button>
+                                </div>
                                 <div class="form-group">
                                     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                         <label class="form-label" style="min-width: 80px; margin: 0;">数据源:</label>
@@ -5687,22 +5778,26 @@ ORDER BY 销售日期 DESC;"></textarea>
                                 <div id="stsTemplateBar" style="display:inline-flex; position: relative;">
                                     <button class="wizard-btn wizard-btn-save" onclick="toggleTemplateMenu(event,'sts')" title="设置模板：保存/加载">设置模板</button>
                                     <button class="wizard-btn wizard-btn-execute" style="min-width: 36px; padding: 0 8px; background: linear-gradient(180deg, #fff7e6 0%, #ffe7ba 100%); border-color:#ffd591;" onclick="toggleTemplateMenu(event,'sts')">▼</button>
-                                    <div id="stsTemplateMenu" style="display:none; position:absolute; left:0; top: 38px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
+                                    <div id="stsTemplateMenu" style="display:none; position:absolute; left:0; bottom: 100%; margin-bottom: 6px; top: auto; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
                                 </div>
                                 <button class="wizard-btn wizard-btn-prev" id="stsBarPrev" onclick="stsBarPrev()" title="上一步 (Alt+Left)">← 上一步</button>
                                 <button class="wizard-btn wizard-btn-next" id="stsBarNext" onclick="stsBarNext()" title="下一步 (Alt+Right)">下一步 →</button>
                                 <button class="wizard-btn wizard-btn-execute" id="stsBarExecute" onclick="executeSingleTableStats()" title="执行统计 (F5)">▶ 执行统计</button>
-                                <button class="wizard-btn wizard-btn-execute" id="stsBarSplit" onclick="stsGoSplit()" title="基于当前SQL执行分拆">⫷ 数据分拆</button>
                                 <button class="wizard-btn wizard-btn-copy" id="stsBarCopy" onclick="copyStsSQL()" title="复制SQL (Ctrl+C)">📋 复制SQL</button>
                                 <div id="stsBarExport" style="display:inline-flex; position: relative;">
-                                    <button class="wizard-btn wizard-btn-download" onclick="exportSts('xlsx')" title="下载Excel">⬇ 下载Excel</button>
+                                    <button class="wizard-btn wizard-btn-download" onclick="exportSts('xlsx')" title="下载">⬇ 下载</button>
                                     <button class="wizard-btn wizard-btn-execute" style="min-width: 36px; padding: 0 8px; background: linear-gradient(180deg, #fff7e6 0%, #ffe7ba 100%); border-color:#ffd591;" onclick="toggleStsDownloadMenu(event)">▼</button>
-                                    <div id="stsDownloadMenu" style="display:none; position:absolute; right:0; top: 38px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 160px;">
-                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportSts('xlsx'); hideStsDownloadMenu();">下载Excel（.xlsx）</div>
-                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportSts('xlsx_text'); hideStsDownloadMenu();">下载Excel（强制全列文本）</div>
-                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportSts('csv'); hideStsDownloadMenu();">下载CSV</div>
+                                    <div id="stsDownloadMenu" style="display:none; position:absolute; right:0; bottom: 100%; margin-bottom: 6px; top: auto; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 160px;">
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportSts('xlsx'); hideStsDownloadMenu();">Excel（.xlsx）</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportSts('xlsx_text'); hideStsDownloadMenu();">Excel（强制全列文本）</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportSts('csv'); hideStsDownloadMenu();">CSV</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportSts('dbf'); hideStsDownloadMenu();">DBF</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportSts('db'); hideStsDownloadMenu();">SQLite (.db)</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportSts('html'); hideStsDownloadMenu();">HTML</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportSts('xml'); hideStsDownloadMenu();">XML</div>
                                     </div>
                                 </div>
+                                <button class="wizard-btn wizard-btn-execute" id="stsBarSplit" onclick="stsGoSplit()" title="基于当前SQL执行分拆">⫷ 数据分拆</button>
                                 <button class="wizard-btn wizard-btn-exit" onclick="exitWizard()" title="退出 (Esc)">✕ 退出</button>
                             </div>
                         </div>
@@ -5737,7 +5832,7 @@ ORDER BY 销售日期 DESC;"></textarea>
                             <div id="mtsTemplateBar" style="display:inline-flex; position: relative;">
                                 <button class="wizard-btn wizard-btn-save" onclick="toggleTemplateMenu(event,'mts')" title="设置模板：保存/加载">设置模板</button>
                                 <button class="wizard-btn wizard-btn-execute" style="min-width: 36px; padding: 0 8px; background: linear-gradient(180deg, #fff7e6 0%, #ffe7ba 100%); border-color:#ffd591;" onclick="toggleTemplateMenu(event,'mts')">▼</button>
-                                <div id="mtsTemplateMenu" style="display:none; position:absolute; right:0; top: 38px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
+                                <div id="mtsTemplateMenu" style="display:none; position:absolute; right:0; bottom: 100%; margin-bottom: 6px; top: auto; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
                             </div>
                         </div>
                         
@@ -5917,17 +6012,21 @@ ORDER BY 销售日期 DESC;"></textarea>
                                 <button class="wizard-btn wizard-btn-prev" onclick="prevMtsStep(4)" title="上一步 (Alt+Left)">← 上一步</button>
                                 <button class="wizard-btn wizard-btn-next hidden" onclick="nextMtsStep(4)" title="下一步 (Alt+Right)">下一步 →</button>
                                 <button class="wizard-btn wizard-btn-execute" onclick="executeMultiTableStats()" title="执行统计 (F5)">▶ 执行统计</button>
-                                <button class="wizard-btn wizard-btn-execute" onclick="mtsGoSplit()" title="基于当前SQL执行分拆">⫷ 数据分拆</button>
                                 <button class="wizard-btn wizard-btn-copy" onclick="copyMtsSQL()" title="复制SQL (Ctrl+C)">📋 复制SQL</button>
                                 <div style="display:inline-flex; position: relative;">
-                                    <button class="wizard-btn wizard-btn-download" onclick="exportMts('xlsx')" title="下载Excel">⬇ 下载Excel</button>
+                                    <button class="wizard-btn wizard-btn-download" onclick="exportMts('xlsx')" title="下载">⬇ 下载</button>
                                     <button class="wizard-btn wizard-btn-execute" style="min-width: 36px; padding: 0 8px; background: linear-gradient(180deg, #fff7e6 0%, #ffe7ba 100%); border-color:#ffd591;" onclick="toggleMtsDownloadMenu(event)">▼</button>
-                                    <div id="mtsDownloadMenu" style="display:none; position:absolute; right:0; top: 38px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 160px;">
-                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportMts('xlsx'); hideMtsDownloadMenu();">下载Excel（.xlsx）</div>
-                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportMts('xlsx_text'); hideMtsDownloadMenu();">下载Excel（强制全列文本）</div>
-                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportMts('csv'); hideMtsDownloadMenu();">下载CSV</div>
+                                    <div id="mtsDownloadMenu" style="display:none; position:absolute; right:0; bottom: 100%; margin-bottom: 6px; top: auto; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 160px;">
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportMts('xlsx'); hideMtsDownloadMenu();">Excel（.xlsx）</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportMts('xlsx_text'); hideMtsDownloadMenu();">Excel（强制全列文本）</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportMts('csv'); hideMtsDownloadMenu();">CSV</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportMts('dbf'); hideMtsDownloadMenu();">DBF</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportMts('db'); hideMtsDownloadMenu();">SQLite (.db)</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportMts('html'); hideMtsDownloadMenu();">HTML</div>
+                                        <div style="padding:10px 12px; cursor:pointer;" onclick="exportMts('xml'); hideMtsDownloadMenu();">XML</div>
                                     </div>
                                 </div>
+                                <button class="wizard-btn wizard-btn-execute" onclick="mtsGoSplit()" title="基于当前SQL执行分拆">⫷ 数据分拆</button>
                                 <button class="wizard-btn wizard-btn-exit" onclick="exitWizard()" title="退出 (Esc)">✕ 退出</button>
                             </div>
                             
@@ -6151,7 +6250,7 @@ ORDER BY 销售日期 DESC;"></textarea>
                             <div id="dsGetSqlBar" style="display:inline-flex; position: relative;">
                                 <button class="wizard-btn wizard-btn-save" onclick="toggleDsGetSqlMenu(event)" title="从其它向导获取SQL">获取SQL</button>
                                 <button class="wizard-btn wizard-btn-execute" style="min-width: 36px; padding: 0 8px; background: linear-gradient(180deg, #fff7e6 0%, #ffe7ba 100%); border-color:#ffd591;" onclick="toggleDsGetSqlMenu(event)">▼</button>
-                                <div id="dsGetSqlMenu" style="display:none; position:absolute; left:0; top: 38px; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
+                                <div id="dsGetSqlMenu" style="display:none; position:absolute; left:0; bottom: 100%; margin-bottom: 6px; top: auto; background:#fff; border:1px solid #ddd; border-radius:6px; box-shadow:0 6px 18px rgba(0,0,0,0.12); z-index: 1000; min-width: 220px; max-height: 360px; overflow:auto;"></div>
                             </div>
                             <div id="dsTemplateBar" style="display:inline-flex; position: relative;">
                                 <button class="wizard-btn wizard-btn-save" onclick="toggleTemplateMenu(event,'stspt')" title="设置模板：保存/加载">设置模板</button>

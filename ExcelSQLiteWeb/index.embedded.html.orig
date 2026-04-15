@@ -1680,10 +1680,7 @@
                 <div class="sidebar-section">
                     <div class="sidebar-section-title" style="display:flex; align-items:center; justify-content:space-between;">
                         <span>最近项目</span>
-                        <span style="display:flex; gap:10px; align-items:center;">
-                            <span style="font-size:8pt; color:#0078d4; cursor:pointer;" onclick="restoreLastScheme()">恢复</span>
-                            <span style="font-size:8pt; color:#0078d4; cursor:pointer;" onclick="switchTab('project-hub')">项目中心</span>
-                        </span>
+                        <span style="font-size:8pt; color:#0078d4; cursor:pointer;" onclick="switchTab('project-hub')">项目中心</span>
                     </div>
                     <div id="recentSchemesList">
                         <div style="color:#6c757d;font-size:9pt;padding:6px 8px;">
@@ -1756,7 +1753,6 @@
                         <div class="card-title" style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
                             <span>项目中心（总项目概况 → 当前活动项目 → 当前项目配置）</span>
                             <span style="display:flex; gap:8px; align-items:center;">
-                                <button class="btn btn-primary" style="padding:3px 10px; font-size:9pt;" onclick="newScheme()">＋ 新增项目</button>
                                 <button class="btn btn-secondary" style="padding:3px 10px; font-size:9pt;" onclick="requestProjectList()">刷新</button>
                                 <button class="btn btn-secondary" style="padding:3px 10px; font-size:9pt;" onclick="exportProjectOverview()">导出概况</button>
                                 <button class="btn btn-secondary" style="padding:3px 10px; font-size:9pt;" onclick="cleanupTempDb()" title="清理超期临时数据库（按项目INI配置）">🧹 清理临时数据库</button>
@@ -2311,7 +2307,6 @@
                             <div style="display:flex; gap:8px; align-items:center;">
                                 <span style="font-size:9pt; color:#495057;">项目名称:</span>
                                 <input id="schemeNameInput" class="form-control" style="width: 260px; height: 30px;" placeholder="例如：销售分析项目（可自动生成）">
-                                <button class="wizard-btn wizard-btn-save" style="min-width: 110px;" onclick="newScheme()">＋ 新建项目</button>
                                 <button class="wizard-btn wizard-btn-save" style="min-width: 120px;" onclick="saveCurrentScheme()">💾 保存为项目</button>
                                 <button class="wizard-btn wizard-btn-warning" style="min-width: 110px;" onclick="rebuildSchemeDb()">♻ 重建数据库</button>
                             </div>
@@ -4726,10 +4721,7 @@ ORDER BY 销售日期 DESC;"></textarea>
                             <div class="card">
                                 <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
                                     <span>设置表关联条件</span>
-                                    <span style="display:flex; gap:6px; align-items:center;">
-                                        <button class="btn btn-secondary" style="font-size:8pt; padding:2px 8px;" onclick="mtqSaveDraft()">保存草稿</button>
-                                        <button class="btn btn-secondary" style="font-size:8pt; padding:2px 8px;" onclick="mtqForceRefreshFields()">刷新关联字段</button>
-                                    </span>
+                                    <button class="btn btn-secondary" style="font-size:8pt; padding:2px 8px;" onclick="mtqForceRefreshFields()">刷新关联字段</button>
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">Join 设计器 <span style="font-size:8pt;color:#6c757d;">（表与字段绑定在同一行；支持 ON 关联 + AND 附加条件）</span></label>
@@ -5373,10 +5365,7 @@ ORDER BY 销售日期 DESC;"></textarea>
                         <!-- 步骤1: 选择维度 -->
                         <div class="step-content active" id="step-sts1">
                             <div class="card">
-                                <div class="card-title" style="display:flex; justify-content:space-between; align-items:center;">
-                                    <span>选择维度（用于分组）</span>
-                                    <button class="btn btn-secondary" style="font-size:8pt; padding:2px 8px;" onclick="forceRefreshSingleTableFields()">刷新表字段</button>
-                                </div>
+                                <div class="card-title">选择维度（用于分组）</div>
                                 <div class="form-group">
                                     <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                         <label class="form-label" style="min-width: 80px; margin: 0;">数据源:</label>
